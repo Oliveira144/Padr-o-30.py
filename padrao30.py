@@ -258,15 +258,13 @@ def detect_all_patterns(hist):
 def gerar_sugestao_inteligente():
     hist = list(st.session_state.historico)
     if len(hist) < 5:
-        return None, 0.0, "Histórico insuficiente para análise"
+        return None, 0.0, "Histórico insuficiente para análise", None
 
-    # Encontra todos os padrões que se aplicam ao histórico atual
     padroes_encontrados = detect_all_patterns(hist)
     
     if not padroes_encontrados:
-        return None, 0.0, "Nenhum padrão confiável detectado"
+        return None, 0.0, "Nenhum padrão confiável detectado", None
 
-    # Calcula a pontuação para cada padrão com base na confiança fixa e na memória de acertos/erros
     padroes_pontuados = []
     for nome, cor, confianca_fixa, motivo in padroes_encontrados:
         memoria = st.session_state.memoria_padroes.get(nome, {"acertos": 0, "erros": 0})
@@ -275,34 +273,33 @@ def gerar_sugestao_inteligente():
         pontuacao = confianca_fixa
         if total_entradas > 0:
             acuracia_memoria = memoria["acertos"] / total_entradas
-            # Pondera a confiança fixa com a acurácia da memória
             pontuacao = (pontuacao * 0.7) + (acuracia_memoria * 0.3)
 
         padroes_pontuados.append((nome, cor, pontuacao, motivo))
     
-    # Ordena os padrões pela maior pontuação
     padroes_pontuados.sort(key=lambda x: x[2], reverse=True)
 
-    # Retorna o padrão com a maior pontuação
     padrao_escolhido = padroes_pontuados[0]
     
-    # Armazena a sugestão e o nome do padrão para a próxima rodada
     st.session_state.ultima_sugestao = padrao_escolhido[1]
     st.session_state.padrao_sugerido = padrao_escolhido[0]
     
-    return padrao_escolhido
+    return padrao_escolhido[0], padrao_escolhido[1], padrao_escolhido[2], padrao_escolhido[3]
 
 # ====== PAINEL DE CONTROLE ======
 st.subheader("🎯 Sugestão de Jogada")
 
-# Executa a função de sugestão no início do script para a próxima rodada
-cor_sugestao, confianca, motivo = gerar_sugestao_inteligente()
-if cor_sugestao is None:
-    st.info("Não há sugestão confiável no momento.")
-else:
-    emoji = cores.get(cor_sugestao, "?")
-    st.markdown(f"**Sugestão:** {emoji} com confiança de {confianca*100:.1f}%")
-    st.caption(f"Motivo: {motivo}")
+# --- CORREÇÃO AQUI ---
+try:
+    nome_sugestao, cor_sugestao, confianca, motivo = gerar_sugestao_inteligente()
+    if cor_sugestao is None:
+        st.info("Não há sugestão confiável no momento.")
+    else:
+        emoji = cores.get(cor_sugestao, "?")
+        st.markdown(f"**Sugestão:** {emoji} com confiança de {confianca*100:.1f}%")
+        st.caption(f"Padrão: {nome_sugestao} | Motivo: {motivo}")
+except TypeError:
+    st.info("Aguardando histórico para gerar a primeira sugestão...")
 
 # Estatísticas simples
 st.subheader("📈 Estatísticas")
