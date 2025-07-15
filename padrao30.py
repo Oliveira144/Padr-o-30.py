@@ -38,13 +38,20 @@ st.subheader("📊 Histórico (mais recente na Linha 1)")
 painel = list(st.session_state.historico)
 while len(painel) < 27:
     painel.insert(0, " ")
+    
+# Inverte a lista para que a exibição comece dos resultados mais recentes
+painel.reverse()
+
 for linha in range(3):
     cols = st.columns(9)
     for i in range(9):
         pos = linha * 9 + i
-        valor = painel[pos]
-        emoji = cores.get(valor, "⬛")
-        cols[i].markdown(f"<div style='text-align:center; font-size:28px'>{emoji}</div>", unsafe_allow_html=True)
+        if pos < len(painel):
+            valor = painel[pos]
+            emoji = cores.get(valor, "⬛")
+            cols[i].markdown(f"<div style='text-align:center; font-size:28px'>{emoji}</div>", unsafe_allow_html=True)
+        else:
+            cols[i].markdown(f"<div style='text-align:center; font-size:28px'>⬛</div>", unsafe_allow_html=True)
 
 # ====== DETECÇÃO DE PADRÕES (30 PADRÕES) ======
 def detect_patterns(hist):
