@@ -36,8 +36,9 @@ cores = {"C": "🔴", "V": "🔵", "E": "🟡"}
 
 # Helper para calcular a melhor sugestão baseada em padrões (função pura, não mexe no estado)
 def _calculate_best_pattern_suggestion_pure(hist_data):
-    if len(hist_data) < 5:
-        return None, None, 0.0, "Histórico insuficiente para análise"
+    # AQUI ESTÁ A MUDANÇA: Exige no mínimo 9 resultados para começar a sugerir
+    if len(hist_data) < 9:
+        return None, None, 0.0, "Histórico insuficiente para análise (mínimo de 9 resultados)"
 
     padroes_encontrados = detect_all_patterns_avancados(hist_data) # Usa a função dos 30 padrões
 
@@ -95,6 +96,7 @@ def registrar_resultado(resultado):
     st.session_state.ultimo_resultado = resultado
 
     # Sempre gera uma nova sugestão G1 para a próxima rodada
+    # A sugestão será None se o histórico ainda não tiver 9 resultados
     nome, cor, conf, motivo = _calculate_best_pattern_suggestion_pure(st.session_state.historico)
     st.session_state.suggestion_for_next_round = cor
     st.session_state.pattern_for_next_round = nome
@@ -352,34 +354,25 @@ padrao_display = None
 confianca_display = 0.0
 motivo_display = ""
 
-# Se não há sugestão para a próxima rodada (primeira execução ou após limpar)
-if st.session_state.suggestion_for_next_round is None:
-    # Tenta gerar a primeira sugestão G1
-    nome, cor, conf, motivo = _calculate_best_pattern_suggestion_pure(st.session_state.historico)
-    if cor is not None:
-        st.session_state.suggestion_for_next_round = cor
-        st.session_state.pattern_for_next_round = nome
-        st.session_state.confidence_for_next_round = conf
-        sugestao_display = cor
-        padrao_display = nome
-        confianca_display = conf
-        motivo_display = motivo
+# Se o histórico tem menos de 9 resultados, exibe mensagem de espera
+if len(st.session_state.historico) < 9:
+    st.info(f"Aguardando histórico para gerar a primeira sugestão (mínimo de 9 resultados). Resultados atuais: {len(st.session_state.historico)}")
 else:
     # Se já existe uma sugestão para a próxima rodada, use-a
     sugestao_display = st.session_state.suggestion_for_next_round
     padrao_display = st.session_state.pattern_for_next_round
     confianca_display = st.session_state.confidence_for_next_round
+    
     # Recalcula o motivo para exibir o mais recente, se houver histórico suficiente
-    if len(st.session_state.historico) >= 5:
-        _, _, _, motivo_display = _calculate_best_pattern_suggestion_pure(st.session_state.historico)
+    # Isso garante que o motivo exibido seja sempre o do padrão mais relevante no momento
+    _, _, _, motivo_display = _calculate_best_pattern_suggestion_pure(st.session_state.historico)
 
-
-if sugestao_display is None:
-    st.info("Aguardando histórico para gerar a primeira sugestão...")
-else:
-    emoji = cores.get(sugestao_display, "?")
-    st.markdown(f"**Sugestão:** {emoji} com confiança de {confianca_display*100:.1f}%")
-    st.caption(f"Padrão: {padrao_display} | Motivo: {motivo_display}")
+    if sugestao_display is None: # Caso _calculate_best_pattern_suggestion_pure retorne None mesmo com histórico > 9
+        st.info("Nenhum padrão confiável detectado no momento para gerar uma sugestão.")
+    else:
+        emoji = cores.get(sugestao_display, "?")
+        st.markdown(f"**Sugestão:** {emoji} com confiança de {confianca_display*100:.1f}%")
+        st.caption(f"Padrão: {padrao_display} | Motivo: {motivo_display}")
 
 
 st.subheader("📈 Estatísticas (G1)")
