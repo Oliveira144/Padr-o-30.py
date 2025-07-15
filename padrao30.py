@@ -14,33 +14,28 @@ st.markdown("Sistema de Decifração de Algoritmo com Foco Total no G1 🎲")
 if "historico" not in st.session_state:
     st.session_state.historico = []
 if "suggestion_for_next_round" not in st.session_state:
-    st.session_state.suggestion_for_next_round = None # A sugestão que será avaliada na *próxima* rodada
+    st.session_state.suggestion_for_next_round = None
 if "pattern_for_next_round" not in st.session_state:
-    st.session_state.pattern_for_next_round = None # O padrão para a sugestão da *próxima* rodada
+    st.session_state.pattern_for_next_round = None
 if "confidence_for_next_round" not in st.session_state:
-    st.session_state.confidence_for_next_round = 0.0 # Confiança para a sugestão da *próxima* rodada
+    st.session_state.confidence_for_next_round = 0.0
+if "motivo_for_next_round" not in st.session_state:
+    st.session_state.motivo_for_next_round = ""
 if "memoria_padroes" not in st.session_state:
     st.session_state.memoria_padroes = {}
 if "ultimo_resultado" not in st.session_state:
     st.session_state.ultimo_resultado = None
-
-# Contadores para estatísticas gerais (sem G2/G3)
 if "estatisticas" not in st.session_state:
     st.session_state.estatisticas = {
         "acertos": 0,
         "erros": 0,
-        "tentativas": 0 # Total de vezes que uma sugestão foi avaliada
+        "tentativas": 0
     }
 
 cores = {"C": "🔴", "V": "🔵", "E": "🟡"}
 
 # ====== DETECÇÃO DE PADRÕES AVANÇADOS (30 PADRÕES) ======
-# ESTA FUNÇÃO FOI MOVIDA PARA CIMA PARA SER DEFINIDA ANTES DE SER CHAMADA
 def detect_all_patterns_avancados(hist):
-    """
-    Detecta os 30 padrões com lógica aprimorada e sugestão baseada na tendência.
-    Retorna uma lista de tuplas: (nome, sugestão, confiança_fixa, motivo).
-    """
     padroes = []
     h = ''.join(hist)
     hist_list = list(hist)
@@ -99,7 +94,7 @@ def detect_all_patterns_avancados(hist):
             sugestao = hist_list[-1]
             padroes.append(("Troca de paleta", sugestao, 0.78, "Mesma estrutura com cores trocadas"))
 
-    # 10. Espelhamento de Linhas (usando histórico completo)
+    # 10. Espelhamento de Linhas
     if len(hist_list) >= 27:
         linha1 = hist_list[-9:]
         linha3 = hist_list[-27:-18]
@@ -132,8 +127,6 @@ def detect_all_patterns_avancados(hist):
         if ultimos[-1] != mais_comum and mais_comum != "E":
             padroes.append(("Reinício Dominante", mais_comum, 0.76, f"Tendência voltando para cor dominante ({mais_comum})"))
     
-    # Padrões da Lista Estendida
-    
     # 15. Indução de Ganância (3-1 armadilha)
     if len(hist_list) >= 4:
         if hist_list[-4] == hist_list[-3] == hist_list[-2] and hist_list[-1] != hist_list[-2] and hist_list[-2] != 'E':
@@ -162,9 +155,9 @@ def detect_all_patterns_avancados(hist):
 
     # 19. Reescrita de Bloco 18
     if len(hist_list) >= 36:
-        bloco_anterior_set = set(hist_list[-36:-18])
-        bloco_atual_set = set(hist_list[-18:])
-        if bloco_anterior_set == bloco_atual_set and 'E' not in bloco_atual_set:
+        bloco_anterior = hist_list[-36:-18]
+        bloco_atual = hist_list[-18:]
+        if bloco_anterior == bloco_atual:
             sugestao = hist_list[-1]
             padroes.append(("Reescrita de Bloco 18", sugestao, 0.92, "Bloco de 18 resultados reescrito"))
             
@@ -243,14 +236,12 @@ def detect_all_patterns_avancados(hist):
         
     return padroes
 
-
-# Helper para calcular a melhor sugestão baseada em padrões (função pura, não mexe no estado)
+# Helper para calcular a melhor sugestão
 def _calculate_best_pattern_suggestion_pure(hist_data):
-    # AQUI ESTÁ A MUDANÇA: Exige no mínimo 9 resultados para começar a sugerir
     if len(hist_data) < 9:
         return None, None, 0.0, "Histórico insuficiente para análise (mínimo de 9 resultados)"
 
-    padroes_encontrados = detect_all_patterns_avancados(hist_data) # Usa a função dos 30 padrões
+    padroes_encontrados = detect_all_patterns_avancados(hist_data)
 
     if not padroes_encontrados:
         return None, None, 0.0, "Nenhum padrão confiável detectado"
@@ -261,7 +252,7 @@ def _calculate_best_pattern_suggestion_pure(hist_data):
         total_entradas = memoria["acertos"] + memoria["erros"]
 
         pontuacao = confianca_fixa
-        if total_entradas >= 5: # Pondera a confiança fixa com a acurácia da memória
+        if total_entradas >= 5:
             acuracia_memoria = memoria["acertos"] / total_entradas
             pontuacao = (confianca_fixa * 0.7) + (acuracia_memoria * 0.3)
 
@@ -272,45 +263,35 @@ def _calculate_best_pattern_suggestion_pure(hist_data):
 
     return padrao_escolhido[0], padrao_escolhido[1], padrao_escolhido[2], padrao_escolhido[3]
 
-
 # ====== FUNÇÕES DE LÓGICA DO SISTEMA ======
 def registrar_resultado(resultado):
-    """
-    Registra o resultado, avalia a sugestão ativa e gera uma nova sugestão G1.
-    """
-    # Só processa se havia uma sugestão ativa para esta rodada E o histórico já tem 9+ resultados
+    # Avalia sugestão anterior se existir
     if st.session_state.suggestion_for_next_round is not None and len(st.session_state.historico) >= 9:
         sugestao_ativa = st.session_state.suggestion_for_next_round
         padrao_ativo = st.session_state.pattern_for_next_round
 
-        # Incrementa o total de tentativas (rodadas avaliadas)
         st.session_state.estatisticas["tentativas"] += 1
 
-        # Lógica de avaliação:
-        # 1. Acerto (GREEN)
         if sugestao_ativa == resultado:
             st.session_state.estatisticas["acertos"] += 1
             st.session_state.memoria_padroes.setdefault(padrao_ativo, {"acertos": 0, "erros": 0})["acertos"] += 1
-        # 2. Empate (Neutro - não é RED nem GREEN para apostas C/V)
         elif sugestao_ativa != 'E' and resultado == 'E':
-            # Não é contado como erro nem acerto, apenas como uma tentativa.
-            # A memória de padrões NÃO é atualizada para este "pass"
             pass
-        # 3. Erro (RED)
         else:
             st.session_state.estatisticas["erros"] += 1
             st.session_state.memoria_padroes.setdefault(padrao_ativo, {"acertos": 0, "erros": 0})["erros"] += 1
 
-    # Adiciona o novo resultado ao histórico
+    # Adiciona novo resultado e limita histórico
     st.session_state.historico.append(resultado)
+    st.session_state.historico = st.session_state.historico[-100:]  # Limita a 100 registros
     st.session_state.ultimo_resultado = resultado
 
-    # Sempre gera uma nova sugestão G1 para a próxima rodada
-    # A sugestão será None se o histórico ainda não tiver 9 resultados
+    # Gera nova sugestão
     nome, cor, conf, motivo = _calculate_best_pattern_suggestion_pure(st.session_state.historico)
     st.session_state.suggestion_for_next_round = cor
     st.session_state.pattern_for_next_round = nome
     st.session_state.confidence_for_next_round = conf
+    st.session_state.motivo_for_next_round = motivo
 
 # ====== INSERÇÃO DE RESULTADO ======
 st.subheader("📥 Inserir Resultado")
@@ -327,7 +308,6 @@ if col3.button("🟡 Empate"):
 
 # ====== EXIBIÇÃO DO HISTÓRICO (PAINEL 3x9) ======
 st.subheader("📊 Histórico (mais recente na Linha 1)")
-# Exibe apenas os últimos 27 resultados para manter o painel visual limpo
 painel = list(st.session_state.historico[-27:]) 
 while len(painel) < 27:
     painel.insert(0, " ")
@@ -337,46 +317,27 @@ for linha in range(3):
     cols = st.columns(9)
     for i in range(9):
         pos = linha * 9 + i
-        if pos < len(painel):
-            valor = painel[pos]
-            emoji = cores.get(valor, "⬛")
-            cols[i].markdown(f"<div style='text-align:center; font-size:28px'>{emoji}</div>", unsafe_allow_html=True)
-        else:
-            cols[i].markdown(f"<div style='text-align:center; font-size:28px'>⬛</div>", unsafe_allow_html=True)
-
+        valor = painel[pos]
+        emoji = cores.get(valor, "⬛")
+        cols[i].markdown(f"<div style='text-align:center; font-size:28px'>{emoji}</div>", unsafe_allow_html=True)
 
 # ====== PAINEL DE CONTROLE ======
 st.subheader("🎯 Sugestão de Jogada (G1)")
 
-# Lógica para determinar a sugestão a ser exibida
-sugestao_display = None
-padrao_display = None
-confianca_display = 0.0
-motivo_display = ""
-
-# Se o histórico tem menos de 9 resultados, exibe mensagem de espera
 if len(st.session_state.historico) < 9:
     st.info(f"Aguardando histórico para gerar a primeira sugestão (mínimo de 9 resultados). Resultados atuais: {len(st.session_state.historico)}")
 else:
-    # Se já existe uma sugestão para a próxima rodada, use-a
     sugestao_display = st.session_state.suggestion_for_next_round
-    padrao_display = st.session_state.pattern_for_next_round
-    confianca_display = st.session_state.confidence_for_next_round
     
-    # Recalcula o motivo para exibir o mais recente, se houver histórico suficiente
-    # Isso garante que o motivo exibido seja sempre o do padrão mais relevante no momento
-    _, _, _, motivo_display = _calculate_best_pattern_suggestion_pure(st.session_state.historico)
-
-    if sugestao_display is None: # Caso _calculate_best_pattern_suggestion_pure retorne None mesmo com histórico > 9
+    if sugestao_display is None:
         st.info("Nenhum padrão confiável detectado no momento para gerar uma sugestão.")
     else:
         emoji = cores.get(sugestao_display, "?")
-        st.markdown(f"**Sugestão:** {emoji} com confiança de {confianca_display*100:.1f}%")
-        st.caption(f"Padrão: {padrao_display} | Motivo: {motivo_display}")
-
+        confianca = st.session_state.confidence_for_next_round
+        st.markdown(f"**Sugestão:** {emoji} com confiança de {confianca*100:.1f}%")
+        st.caption(f"Padrão: {st.session_state.pattern_for_next_round} | Motivo: {st.session_state.motivo_for_next_round}")
 
 st.subheader("📈 Estatísticas (G1)")
-
 total_tentativas = st.session_state.estatisticas["tentativas"]
 if total_tentativas > 0:
     acuracia_total = st.session_state.estatisticas["acertos"] / total_tentativas * 100
@@ -394,6 +355,7 @@ if st.button("Limpar Histórico e Estatísticas"):
     st.session_state.suggestion_for_next_round = None
     st.session_state.pattern_for_next_round = None
     st.session_state.confidence_for_next_round = 0.0
+    st.session_state.motivo_for_next_round = ""
     st.session_state.memoria_padroes = {}
     st.session_state.ultimo_resultado = None
     st.session_state.estatisticas = {
@@ -402,6 +364,3 @@ if st.button("Limpar Histórico e Estatísticas"):
         "tentativas": 0
     }
     st.rerun()
-
-# ====== FIM DO APP ======
-
