@@ -34,109 +34,8 @@ if "estatisticas" not in st.session_state:
 
 cores = {"C": "🔴", "V": "🔵", "E": "🟡"}
 
-# Helper para calcular a melhor sugestão baseada em padrões (função pura, não mexe no estado)
-def _calculate_best_pattern_suggestion_pure(hist_data):
-    # AQUI ESTÁ A MUDANÇA: Exige no mínimo 9 resultados para começar a sugerir
-    if len(hist_data) < 9:
-        return None, None, 0.0, "Histórico insuficiente para análise (mínimo de 9 resultados)"
-
-    padroes_encontrados = detect_all_patterns_avancados(hist_data) # Usa a função dos 30 padrões
-
-    if not padroes_encontrados:
-        return None, None, 0.0, "Nenhum padrão confiável detectado"
-
-    padroes_pontuados = []
-    for nome, cor, confianca_fixa, motivo in padroes_encontrados:
-        memoria = st.session_state.memoria_padroes.get(nome, {"acertos": 0, "erros": 0})
-        total_entradas = memoria["acertos"] + memoria["erros"]
-
-        pontuacao = confianca_fixa
-        if total_entradas >= 5: # Pondera a confiança fixa com a acurácia da memória
-            acuracia_memoria = memoria["acertos"] / total_entradas
-            pontuacao = (confianca_fixa * 0.7) + (acuracia_memoria * 0.3)
-
-        padroes_pontuados.append((nome, cor, pontuacao, motivo))
-
-    padroes_pontuados.sort(key=lambda x: x[2], reverse=True)
-    padrao_escolhido = padroes_pontuados[0]
-
-    return padrao_escolhido[0], padrao_escolhido[1], padrao_escolhido[2], padrao_escolhido[3]
-
-
-# ====== FUNÇÕES DE LÓGICA DO SISTEMA ======
-def registrar_resultado(resultado):
-    """
-    Registra o resultado, avalia a sugestão ativa e gera uma nova sugestão G1.
-    """
-    # Só processa se havia uma sugestão ativa para esta rodada
-    if st.session_state.suggestion_for_next_round is not None:
-        sugestao_ativa = st.session_state.suggestion_for_next_round
-        padrao_ativo = st.session_state.pattern_for_next_round
-
-        # Incrementa o total de tentativas (rodadas avaliadas)
-        st.session_state.estatisticas["tentativas"] += 1
-
-        # Lógica de avaliação:
-        # 1. Acerto (GREEN)
-        if sugestao_ativa == resultado:
-            st.session_state.estatisticas["acertos"] += 1
-            st.session_state.memoria_padroes.setdefault(padrao_ativo, {"acertos": 0, "erros": 0})["acertos"] += 1
-        # 2. Empate (Neutro - não é RED nem GREEN para apostas C/V)
-        elif sugestao_ativa != 'E' and resultado == 'E':
-            # Não é contado como erro nem acerto, apenas como uma tentativa.
-            # A memória de padrões NÃO é atualizada para este "pass"
-            pass
-        # 3. Erro (RED)
-        else:
-            st.session_state.estatisticas["erros"] += 1
-            st.session_state.memoria_padroes.setdefault(padrao_ativo, {"acertos": 0, "erros": 0})["erros"] += 1
-
-    # Adiciona o novo resultado ao histórico
-    st.session_state.historico.append(resultado)
-    st.session_state.ultimo_resultado = resultado
-
-    # Sempre gera uma nova sugestão G1 para a próxima rodada
-    # A sugestão será None se o histórico ainda não tiver 9 resultados
-    nome, cor, conf, motivo = _calculate_best_pattern_suggestion_pure(st.session_state.historico)
-    st.session_state.suggestion_for_next_round = cor
-    st.session_state.pattern_for_next_round = nome
-    st.session_state.confidence_for_next_round = conf
-
-# ====== INSERÇÃO DE RESULTADO ======
-st.subheader("📥 Inserir Resultado")
-col1, col2, col3 = st.columns(3)
-if col1.button("🔴 Casa"):
-    registrar_resultado("C")
-    st.rerun()
-if col2.button("🔵 Visitante"):
-    registrar_resultado("V")
-    st.rerun()
-if col3.button("🟡 Empate"):
-    registrar_resultado("E")
-    st.rerun()
-
-# ====== EXIBIÇÃO DO HISTÓRICO (PAINEL 3x9) ======
-st.subheader("📊 Histórico (mais recente na Linha 1)")
-# Exibe apenas os últimos 27 resultados para manter o painel visual limpo
-painel = list(st.session_state.historico[-27:]) 
-while len(painel) < 27:
-    painel.insert(0, " ")
-painel.reverse()
-
-for linha in range(3):
-    cols = st.columns(9)
-    for i in range(9):
-        pos = linha * 9 + i
-        if pos < len(painel):
-            valor = painel[pos]
-            emoji = cores.get(valor, "⬛")
-            cols[i].markdown(f"<div style='text-align:center; font-size:28px'>{emoji}</div>", unsafe_allow_html=True)
-        else:
-            cols[i].markdown(f"<div style='text-align:center; font-size:28px'>⬛</div>", unsafe_allow_html=True)
-
 # ====== DETECÇÃO DE PADRÕES AVANÇADOS (30 PADRÕES) ======
-# Esta função contém os 30 padrões que você forneceu.
-# Ela é chamada pela função _calculate_best_pattern_suggestion_pure.
+# ESTA FUNÇÃO FOI MOVIDA PARA CIMA PARA SER DEFINIDA ANTES DE SER CHAMADA
 def detect_all_patterns_avancados(hist):
     """
     Detecta os 30 padrões com lógica aprimorada e sugestão baseada na tendência.
@@ -343,6 +242,107 @@ def detect_all_patterns_avancados(hist):
         padroes.append(("Padrão de Isca", sugestao, 0.95, "Padrão repetido, a quebra pode vir em breve"))
         
     return padroes
+
+
+# Helper para calcular a melhor sugestão baseada em padrões (função pura, não mexe no estado)
+def _calculate_best_pattern_suggestion_pure(hist_data):
+    # AQUI ESTÁ A MUDANÇA: Exige no mínimo 9 resultados para começar a sugerir
+    if len(hist_data) < 9:
+        return None, None, 0.0, "Histórico insuficiente para análise (mínimo de 9 resultados)"
+
+    padroes_encontrados = detect_all_patterns_avancados(hist_data) # Usa a função dos 30 padrões
+
+    if not padroes_encontrados:
+        return None, None, 0.0, "Nenhum padrão confiável detectado"
+
+    padroes_pontuados = []
+    for nome, cor, confianca_fixa, motivo in padroes_encontrados:
+        memoria = st.session_state.memoria_padroes.get(nome, {"acertos": 0, "erros": 0})
+        total_entradas = memoria["acertos"] + memoria["erros"]
+
+        pontuacao = confianca_fixa
+        if total_entradas >= 5: # Pondera a confiança fixa com a acurácia da memória
+            acuracia_memoria = memoria["acertos"] / total_entradas
+            pontuacao = (confianca_fixa * 0.7) + (acuracia_memoria * 0.3)
+
+        padroes_pontuados.append((nome, cor, pontuacao, motivo))
+
+    padroes_pontuados.sort(key=lambda x: x[2], reverse=True)
+    padrao_escolhido = padroes_pontuados[0]
+
+    return padrao_escolhido[0], padrao_escolhido[1], padrao_escolhido[2], padrao_escolhido[3]
+
+
+# ====== FUNÇÕES DE LÓGICA DO SISTEMA ======
+def registrar_resultado(resultado):
+    """
+    Registra o resultado, avalia a sugestão ativa e gera uma nova sugestão G1.
+    """
+    # Só processa se havia uma sugestão ativa para esta rodada E o histórico já tem 9+ resultados
+    if st.session_state.suggestion_for_next_round is not None and len(st.session_state.historico) >= 9:
+        sugestao_ativa = st.session_state.suggestion_for_next_round
+        padrao_ativo = st.session_state.pattern_for_next_round
+
+        # Incrementa o total de tentativas (rodadas avaliadas)
+        st.session_state.estatisticas["tentativas"] += 1
+
+        # Lógica de avaliação:
+        # 1. Acerto (GREEN)
+        if sugestao_ativa == resultado:
+            st.session_state.estatisticas["acertos"] += 1
+            st.session_state.memoria_padroes.setdefault(padrao_ativo, {"acertos": 0, "erros": 0})["acertos"] += 1
+        # 2. Empate (Neutro - não é RED nem GREEN para apostas C/V)
+        elif sugestao_ativa != 'E' and resultado == 'E':
+            # Não é contado como erro nem acerto, apenas como uma tentativa.
+            # A memória de padrões NÃO é atualizada para este "pass"
+            pass
+        # 3. Erro (RED)
+        else:
+            st.session_state.estatisticas["erros"] += 1
+            st.session_state.memoria_padroes.setdefault(padrao_ativo, {"acertos": 0, "erros": 0})["erros"] += 1
+
+    # Adiciona o novo resultado ao histórico
+    st.session_state.historico.append(resultado)
+    st.session_state.ultimo_resultado = resultado
+
+    # Sempre gera uma nova sugestão G1 para a próxima rodada
+    # A sugestão será None se o histórico ainda não tiver 9 resultados
+    nome, cor, conf, motivo = _calculate_best_pattern_suggestion_pure(st.session_state.historico)
+    st.session_state.suggestion_for_next_round = cor
+    st.session_state.pattern_for_next_round = nome
+    st.session_state.confidence_for_next_round = conf
+
+# ====== INSERÇÃO DE RESULTADO ======
+st.subheader("📥 Inserir Resultado")
+col1, col2, col3 = st.columns(3)
+if col1.button("🔴 Casa"):
+    registrar_resultado("C")
+    st.rerun()
+if col2.button("🔵 Visitante"):
+    registrar_resultado("V")
+    st.rerun()
+if col3.button("🟡 Empate"):
+    registrar_resultado("E")
+    st.rerun()
+
+# ====== EXIBIÇÃO DO HISTÓRICO (PAINEL 3x9) ======
+st.subheader("📊 Histórico (mais recente na Linha 1)")
+# Exibe apenas os últimos 27 resultados para manter o painel visual limpo
+painel = list(st.session_state.historico[-27:]) 
+while len(painel) < 27:
+    painel.insert(0, " ")
+painel.reverse()
+
+for linha in range(3):
+    cols = st.columns(9)
+    for i in range(9):
+        pos = linha * 9 + i
+        if pos < len(painel):
+            valor = painel[pos]
+            emoji = cores.get(valor, "⬛")
+            cols[i].markdown(f"<div style='text-align:center; font-size:28px'>{emoji}</div>", unsafe_allow_html=True)
+        else:
+            cols[i].markdown(f"<div style='text-align:center; font-size:28px'>⬛</div>", unsafe_allow_html=True)
 
 
 # ====== PAINEL DE CONTROLE ======
