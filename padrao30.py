@@ -1,37 +1,67 @@
-# predict_pro_v2_complete.py
+# predict_pro_v3_complete.py
 
 import streamlit as st
 from collections import deque, Counter
 import time
 
 # ====== CONFIGURAÇÃO STREAMLIT ======
-st.set_page_config(page_title="🎯 PREDICT PRO v2 – Anti-Cassino", layout="centered")
-st.title("🎯 PREDICT PRO v2 – Anti-Cassino")
+st.set_page_config(page_title="🎯 PREDICT PRO v3 – Anti-Cassino", layout="centered")
+st.title("🎯 PREDICT PRO v3 – Anti-Cassino")
 st.markdown("Sistema profissional de previsão inteligente para Football Studio Live 🎲")
 
 # ====== INICIALIZAÇÃO DO ESTADO ======
 if "historico" not in st.session_state:
     st.session_state.historico = deque(maxlen=27)
-if "entradas" not in st.session_state:
-    st.session_state.entradas = []
 if "acertos" not in st.session_state:
     st.session_state.acertos = 0
 if "erros" not in st.session_state:
     st.session_state.erros = 0
+if "ultima_sugestao" not in st.session_state:
+    st.session_state.ultima_sugestao = None
+if "padrao_sugerido" not in st.session_state:
+    st.session_state.padrao_sugerido = None
 if "memoria_padroes" not in st.session_state:
+    # Formato: {"nome_do_padrao": {"acertos": 0, "erros": 0}}
     st.session_state.memoria_padroes = {}
 
 cores = {"C": "🔴", "V": "🔵", "E": "🟡"}
+
+# ====== FUNÇÕES DE LÓGICA DO SISTEMA ======
+def registrar_resultado(resultado):
+    """
+    Registra o resultado e, se houver uma sugestão anterior,
+    avalia o acerto e registra na memória do padrão.
+    """
+    # 1. Verifica e atualiza o histórico e as estatísticas de acerto/erro
+    if st.session_state.ultima_sugestao is not None and len(st.session_state.historico) > 0:
+        sugestao = st.session_state.ultima_sugestao
+        padrao = st.session_state.padrao_sugerido
+
+        if sugestao == resultado:
+            st.session_state.acertos += 1
+            if padrao:
+                st.session_state.memoria_padroes.setdefault(padrao, {"acertos": 0, "erros": 0})["acertos"] += 1
+        else:
+            st.session_state.erros += 1
+            if padrao:
+                st.session_state.memoria_padroes.setdefault(padrao, {"acertos": 0, "erros": 0})["erros"] += 1
+
+    # 2. Adiciona o novo resultado ao histórico
+    st.session_state.historico.append(resultado)
+
+    # 3. Limpa a sugestão para a próxima rodada
+    st.session_state.ultima_sugestao = None
+    st.session_state.padrao_sugerido = None
 
 # ====== INSERÇÃO DE RESULTADO ======
 st.subheader("📥 Inserir Resultado")
 col1, col2, col3 = st.columns(3)
 if col1.button("🔴 Casa"):
-    st.session_state.historico.append("C")
+    registrar_resultado("C")
 if col2.button("🔵 Visitante"):
-    st.session_state.historico.append("V")
+    registrar_resultado("V")
 if col3.button("🟡 Empate"):
-    st.session_state.historico.append("E")
+    registrar_resultado("E")
 
 # ====== EXIBIÇÃO DO HISTÓRICO (PAINEL 3x9) ======
 st.subheader("📊 Histórico (mais recente na Linha 1)")
@@ -39,7 +69,6 @@ painel = list(st.session_state.historico)
 while len(painel) < 27:
     painel.insert(0, " ")
     
-# Inverte a lista para que a exibição comece dos resultados mais recentes
 painel.reverse()
 
 for linha in range(3):
@@ -53,8 +82,10 @@ for linha in range(3):
         else:
             cols[i].markdown(f"<div style='text-align:center; font-size:28px'>⬛</div>", unsafe_allow_html=True)
 
+
 # ====== DETECÇÃO DE PADRÕES (30 PADRÕES) ======
-def detect_patterns(hist):
+def detect_all_patterns(hist):
+    """Detecta todos os padrões e retorna uma lista deles."""
     padroes = []
     h = ''.join(hist)
 
@@ -221,48 +252,57 @@ def detect_patterns(hist):
         if seq[::2] == seq[1::2][::-1]:
             padroes.append(("Simetria Irregular", seq[-1], 0.77, "Padrão espelhado alternado"))
 
-    if not padroes:
-        return None, None, 0.0, "Nenhum padrão confiável detectado"
-    padroes.sort(key=lambda x: x[2], reverse=True)
-    return padroes[0]
+    return padroes
 
-# ====== SUGESTÃO E APRENDIZADO ======
-def gerar_sugestao():
+# ====== SUGESTÃO INTELIGENTE E APRENDIZADO ======
+def gerar_sugestao_inteligente():
     hist = list(st.session_state.historico)
     if len(hist) < 5:
         return None, 0.0, "Histórico insuficiente para análise"
-    padrao, cor, confianca, motivo = detect_patterns(hist)
-    return cor, confianca, motivo
 
-def registrar_entrada(cor_entrada):
-    st.session_state.entradas.append((time.time(), cor_entrada))
-    if len(st.session_state.historico) == 0:
-        return
-    ultimo_resultado = st.session_state.historico[-1]
-    if cor_entrada == ultimo_resultado:
-        st.session_state.acertos += 1
-    else:
-        st.session_state.erros += 1
+    # Encontra todos os padrões que se aplicam ao histórico atual
+    padroes_encontrados = detect_all_patterns(hist)
+    
+    if not padroes_encontrados:
+        return None, 0.0, "Nenhum padrão confiável detectado"
+
+    # Calcula a pontuação para cada padrão com base na confiança fixa e na memória de acertos/erros
+    padroes_pontuados = []
+    for nome, cor, confianca_fixa, motivo in padroes_encontrados:
+        memoria = st.session_state.memoria_padroes.get(nome, {"acertos": 0, "erros": 0})
+        total_entradas = memoria["acertos"] + memoria["erros"]
+
+        pontuacao = confianca_fixa
+        if total_entradas > 0:
+            acuracia_memoria = memoria["acertos"] / total_entradas
+            # Pondera a confiança fixa com a acurácia da memória
+            pontuacao = (pontuacao * 0.7) + (acuracia_memoria * 0.3)
+
+        padroes_pontuados.append((nome, cor, pontuacao, motivo))
+    
+    # Ordena os padrões pela maior pontuação
+    padroes_pontuados.sort(key=lambda x: x[2], reverse=True)
+
+    # Retorna o padrão com a maior pontuação
+    padrao_escolhido = padroes_pontuados[0]
+    
+    # Armazena a sugestão e o nome do padrão para a próxima rodada
+    st.session_state.ultima_sugestao = padrao_escolhido[1]
+    st.session_state.padrao_sugerido = padrao_escolhido[0]
+    
+    return padrao_escolhido
 
 # ====== PAINEL DE CONTROLE ======
 st.subheader("🎯 Sugestão de Jogada")
-cor_sugestao, confianca, motivo = gerar_sugestao()
+
+# Executa a função de sugestão no início do script para a próxima rodada
+cor_sugestao, confianca, motivo = gerar_sugestao_inteligente()
 if cor_sugestao is None:
     st.info("Não há sugestão confiável no momento.")
 else:
     emoji = cores.get(cor_sugestao, "?")
     st.markdown(f"**Sugestão:** {emoji} com confiança de {confianca*100:.1f}%")
     st.caption(f"Motivo: {motivo}")
-
-# Botões para registrar entrada confirmada pelo usuário
-st.write("📝 Registre sua entrada após o resultado:")
-c1, c2, c3 = st.columns(3)
-if c1.button("🔴 Registrei Casa"):
-    registrar_entrada("C")
-if c2.button("🔵 Registrei Visitante"):
-    registrar_entrada("V")
-if c3.button("🟡 Registrei Empate"):
-    registrar_entrada("E")
 
 # Estatísticas simples
 st.subheader("📈 Estatísticas")
@@ -275,5 +315,6 @@ if total > 0:
     st.write(f"Acurácia: {acuracia:.2f}%")
 else:
     st.write("Nenhuma entrada registrada ainda.")
+st.caption("Acurácia baseada nas sugestões do sistema.")
 
 # ====== FIM DO APP ======
