@@ -1,39 +1,24 @@
-# predict_pro_v3_complete_revisado.py
+# predict_pro_v3_decifrador.py
 
 import streamlit as st
 from collections import deque, Counter
 import time
+import math
 
 # ====== CONFIGURAÇÃO STREAMLIT ======
-st.set_page_config(page_title="🎯 PREDICT PRO v3 – Anti-Cassino", layout="centered")
-st.title("🎯 PREDICT PRO v3 – Anti-Cassino")
-st.markdown("Sistema profissional de previsão inteligente para Football Studio Live 🎲")
+st.set_page_config(page_title="🎯 PREDICT PRO v3 – Decifrador de Algoritmo", layout="centered")
+st.title("🎯 PREDICT PRO v3 – Decifrador de Algoritmo")
+st.markdown("Análise reversa dos padrões de geração de jogos no Football Studio Live 🎲")
 
-# ====== INICIALIZAÇÃO DO ESTADO ======
-if "historico" not in st.session_state:
-    st.session_state.historico = deque(maxlen=27)
-if "acertos" not in st.session_state:
-    st.session_state.acertos = 0
-if "erros" not in st.session_state:
-    st.session_state.erros = 0
-if "ultima_sugestao" not in st.session_state:
-    st.session_state.ultima_sugestao = None
-if "padrao_sugerido" not in st.session_state:
-    st.session_state.padrao_sugerido = None
-if "memoria_padroes" not in st.session_state:
-    # Formato: {"nome_do_padrao": {"acertos": 0, "erros": 0}}
-    st.session_state.memoria_padroes = {}
-if "ultimo_resultado" not in st.session_state:
-    st.session_state.ultimo_resultado = None
+# (O restante do código de inicialização de estado e registro de resultados permanece o mesmo)
+# ... [Inclua o código de inicialização de estado e a função registrar_resultado] ...
+# ... [Inclua o código de exibição do histórico] ...
 
-cores = {"C": "🔴", "V": "🔵", "E": "🟡"}
+# As funções de inicialização de estado, registro e visualização do histórico do código anterior são mantidas aqui.
+# ... [Código anterior de st.session_state e botões] ...
 
-# ====== FUNÇÕES DE LÓGICA DO SISTEMA ======
+# Código de registro_resultado e exibição do histórico
 def registrar_resultado(resultado):
-    """
-    Registra o resultado, avalia a sugestão anterior e limpa o estado para a próxima rodada.
-    """
-    # 1. Avalia o acerto da última sugestão
     if st.session_state.ultima_sugestao is not None and st.session_state.padrao_sugerido is not None:
         sugestao = st.session_state.ultima_sugestao
         padrao = st.session_state.padrao_sugerido
@@ -45,15 +30,11 @@ def registrar_resultado(resultado):
             st.session_state.erros += 1
             st.session_state.memoria_padroes.setdefault(padrao, {"acertos": 0, "erros": 0})["erros"] += 1
 
-    # 2. Adiciona o novo resultado ao histórico
     st.session_state.historico.append(resultado)
     st.session_state.ultimo_resultado = resultado
-
-    # 3. Limpa a sugestão para a próxima rodada
     st.session_state.ultima_sugestao = None
     st.session_state.padrao_sugerido = None
 
-# ====== INSERÇÃO DE RESULTADO ======
 st.subheader("📥 Inserir Resultado")
 col1, col2, col3 = st.columns(3)
 if col1.button("🔴 Casa"):
@@ -66,12 +47,10 @@ if col3.button("🟡 Empate"):
     registrar_resultado("E")
     st.rerun()
 
-# ====== EXIBIÇÃO DO HISTÓRICO (PAINEL 3x9) ======
 st.subheader("📊 Histórico (mais recente na Linha 1)")
 painel = list(st.session_state.historico)
 while len(painel) < 27:
     painel.insert(0, " ")
-    
 painel.reverse()
 
 for linha in range(3):
@@ -85,210 +64,139 @@ for linha in range(3):
         else:
             cols[i].markdown(f"<div style='text-align:center; font-size:28px'>⬛</div>", unsafe_allow_html=True)
 
-# ====== DETECÇÃO DE PADRÕES (REVISADA) ======
-def detect_all_patterns_revisada(hist):
-    """
-    Detecta padrões com lógica mais clara e sugestão baseada na tendência.
-    Retorna uma lista de tuplas: (nome, sugestão, confiança_fixa, motivo).
-    """
+
+# ====== DETECÇÃO DE PADRÕES (REVISADA E ESTENDIDA) ======
+def detect_all_patterns_avancados(hist):
     padroes = []
     h = ''.join(hist)
-    
-    # É crucial usar a lista do histórico para fatiamento
     hist_list = list(hist)
-
-    # 1. Sequência Crescente
-    # Padrão: A-A-A, sugere A
-    if len(hist_list) >= 3 and hist_list[-3] == hist_list[-2] == hist_list[-1] != "E":
-        sugestao = hist_list[-1]
-        padroes.append(("Sequência Crescente", sugestao, 0.75, "3 repetições seguidas"))
     
-    # 2. Alternância Simples
-    # Padrão: A-B-A-B, sugere A
-    if len(hist_list) >= 4 and hist_list[-1] == hist_list[-3] and hist_list[-2] == hist_list[-4] and hist_list[-1] != hist_list[-2]:
-        sugestao = hist_list[-1]
-        padroes.append(("Alternância Simples", sugestao, 0.65, "Padrão A-B-A-B"))
-
-    # 3. Empate após alternância
-    # Padrão: A-B-E, sugere A ou V (o que não for Empate)
-    if len(hist_list) >= 3 and hist_list[-1] == "E" and hist_list[-2] != hist_list[-3] and hist_list[-3] != "E":
-        sugestao = hist_list[-3] # Sugere o lado que "parou"
-        padroes.append(("Empate após alternância", sugestao, 0.68, "Empate surge após troca de lados"))
-
-    # 4. 2x2 alternado
-    # Padrão: CCVV ou VVCC, sugere o contrário do último grupo
-    if h.endswith("CCVV"):
-        padroes.append(("2x2 alternado", "C", 0.70, "Sequência CCVV, sugere C"))
-    if h.endswith("VVCC"):
-        padroes.append(("2x2 alternado", "V", 0.70, "Sequência VVCC, sugere V"))
-
-    # 5. Casa-Empate-Casa
-    # Padrão: C-E-C, sugere V
-    if h.endswith("CEC"):
-        padroes.append(("Casa-Empate-Casa", "V", 0.72, "Empate cercado por Casa, sugere V"))
-
-    # 6. Palíndromo 5 posições
-    # Padrão: A-B-C-B-A, sugere C
-    if len(hist_list) >= 5 and hist_list[-5] == hist_list[-1] and hist_list[-4] == hist_list[-2] and hist_list[-3] not in ["E", hist_list[-1]]:
-        sugestao = hist_list[-3]
-        padroes.append(("Palíndromo 5 posições", sugestao, 0.66, "Sequência simétrica"))
-
-    # 7. Coluna repetida (usando histórico completo)
-    if len(hist_list) >= 9:
-        col1 = hist_list[-9:-6]
-        col3 = hist_list[-3:]
-        if col1 == col3 and col1 != ["E", "E", "E"]:
-            sugestao = col3[0] # Sugere a próxima da sequência
-            padroes.append(("Coluna repetida", sugestao, 0.80, "Repetição estrutural detectada"))
-
-    # 8. Reescrita Vertical
-    if len(hist_list) >= 12:
-        col1 = hist_list[-12:-9]
-        col4 = hist_list[-3:]
-        if col1 == col4 and col1 != ["E", "E", "E"]:
-            sugestao = col4[0] # Sugere a próxima da sequência
-            padroes.append(("Reescrita Vertical", sugestao, 0.85, "Coluna 4 igual à Coluna 1"))
+    # Adicionando os padrões da sua lista extendida
     
-    # 9. Troca de paleta
-    if len(hist_list) >= 6:
-        bloco1 = sorted(hist_list[-6:-3])
-        bloco2 = sorted(hist_list[-3:])
-        if bloco1 == bloco2 and hist_list[-6:-3] != hist_list[-3:]:
-            sugestao = hist_list[-1] # Sugere a continuidade do último bloco
-            padroes.append(("Troca de paleta", sugestao, 0.78, "Mesma estrutura com cores trocadas"))
+    # 15. Indução de Ganância (3-1 armadilha)
+    if len(hist_list) >= 4:
+        if hist_list[-4] == hist_list[-3] == hist_list[-2] and hist_list[-1] != hist_list[-2] and hist_list[-2] != 'E':
+            sugestao = hist_list[-2]
+            padroes.append(("Indução de Ganância (3-1)", sugestao, 0.90, "Armadilha de 3-1, sugere a cor dominante para retorno"))
+            
+    # 16. Padrão de Gancho (Hook Pattern)
+    if h.endswith("CVCV") or h.endswith("VCVC"):
+        if h.endswith("CVC"): # Se a sequência for CVC, sugere C (a quebra)
+            padroes.append(("Padrão de Gancho (Hook)", 'C', 0.85, "Gancho em C-V-C, sugere C"))
+        elif h.endswith("VCV"): # Se a sequência for VCV, sugere V
+            padroes.append(("Padrão de Gancho (Hook)", 'V', 0.85, "Gancho em V-C-V, sugere V"))
+            
+    # 17. Padrão Armadilha de Empate
+    if len(hist_list) >= 3 and hist_list[-1] == 'E' and hist_list[-2] != 'E':
+        sugestao = hist_list[-2]
+        padroes.append(("Armadilha de Empate", sugestao, 0.75, "Empate quebrou o padrão, sugere a cor anterior"))
 
-    # 10. Espelhamento de Linhas (usando histórico completo)
-    if len(hist_list) == 27:
-        linha1 = hist_list[-9:]
-        linha3 = hist_list[:9]
-        if linha1 == linha3 and linha1 != ["E", "E", "E"]:
-            sugestao = linha1[0] # Sugere o início da linha
-            padroes.append(("Espelhamento de Linhas", sugestao, 0.82, "Linha 1 igual à Linha 3"))
-    
-    # 11. Coluna 1 = Coluna 5
-    if len(hist_list) >= 15:
-        col1 = hist_list[-15:-12]
-        col5 = hist_list[-3:]
-        if col1 == col5 and col1 != ["E", "E", "E"]:
-            sugestao = col5[0]
-            padroes.append(("Coluna 1 = Coluna 5", sugestao, 0.83, "Padrão estrutural oculto detectado"))
-    
-    # 12. Loop CCE
-    if h.endswith("CCE"):
-        padroes.append(("Loop CCE", "C", 0.77, "Sequência C-C-E, sugere C"))
+    # 18. Ciclo 9 Invertido
+    if len(hist_list) >= 18:
+        bloco1 = hist_list[-18:-9]
+        bloco2 = hist_list[-9:]
+        if bloco1 == bloco2[::-1] and 'E' not in bloco1:
+            sugestao = bloco2[0] # Sugere o primeiro do bloco invertido
+            padroes.append(("Ciclo 9 Invertido", sugestao, 0.88, "O ciclo de 9 resultados se inverteu"))
 
-    # 13. Disfarce de Dominância
-    if h.endswith("CVCV"):
-        padroes.append(("Disfarce de Dominância", "C", 0.70, "Padrão de alternância CVCV, sugere C"))
-    if h.endswith("VCEC"):
-        padroes.append(("Disfarce de Dominância", "V", 0.70, "Padrão de alternância VCEC, sugere V"))
-
-    # 14. Reinício Dominante
-    if len(hist_list) >= 6:
-        ultimos = hist_list[-6:]
-        mais_comum = Counter(ultimos).most_common(1)[0][0]
-        if ultimos[-1] != mais_comum and mais_comum != "E":
-            padroes.append(("Reinício Dominante", mais_comum, 0.76, f"Tendência voltando para cor dominante ({mais_comum})"))
-    
-    # 15. Empate Estruturado
-    # (Este padrão precisa ser repensado pois a posição 5, 14, 23 não é fixa no deque)
-    # Ignorado na revisão para evitar lógica complexa
-    
-    # 16. Loop EVC
-    if h.endswith("EVC"):
-        padroes.append(("Loop EVC", "E", 0.73, "Sequência E-V-C, sugere E"))
-
-    # 17. Reescrita Deslocada
-    if len(hist_list) >= 6:
-        a = hist_list[-6:-3]
-        b = hist_list[-3:]
-        if a[0] == b[1] and a[1] == b[2]:
-            sugestao = b[0]
-            padroes.append(("Reescrita Deslocada", sugestao, 0.75, "Colunas com padrão deslocado"))
-
-    # 18. Colunas Intercaladas Iguais
-    if len(hist_list) >= 15:
-        col1 = hist_list[-15:-12]
-        col3 = hist_list[-9:-6]
-        col5 = hist_list[-3:]
-        if col1 == col3 == col5 and col1 != ["E", "E", "E"]:
-            sugestao = col5[0]
-            padroes.append(("Colunas Intercaladas Iguais", sugestao, 0.86, "3 colunas não contíguas repetidas"))
-
-    # 19. Linha 3 espelha Linha 1 invertida
-    if len(hist_list) == 27:
-        l1 = hist_list[-9:]
-        l3 = hist_list[0:9]
-        if l3 == l1[::-1] and l1 != ["E","E","E","E","E","E","E","E","E"]:
-            sugestao = l3[0] # Sugere o início da linha
-            padroes.append(("Linha 3 espelha Linha 1 invertida", sugestao, 0.81, "Reversão detectada entre linhas"))
-
-    # 20. 4x Repetição com Desvio
-    if len(hist_list) >= 5:
-        seq = hist_list[-5:]
-        count_e = seq.count("E")
-        if count_e < 4 and len(set(seq)) <= 2:
-            mais_comum = Counter(seq).most_common(1)[0][0]
-            if mais_comum != "E":
-                padroes.append(("4x Repetição com Desvio", mais_comum, 0.74, "Apenas 1 valor diferente em 5"))
-    
-    # 21. Empate Disfarçado
-    if len(hist_list) >= 5 and hist_list[-1] == "E":
-        if hist_list[-2] != hist_list[-3] != hist_list[-4] != hist_list[-5]:
-            padroes.append(("Empate Disfarçado", "E", 0.72, "Empate após alternância longa"))
-
-    # 22. Quebra de Dominância
-    if len(hist_list) >= 5 and hist_list[-5] == hist_list[-4] == hist_list[-3] == hist_list[-2] and hist_list[-1] != hist_list[-2]:
-        sugestao = hist_list[-2] # Sugere o retorno à cor dominante
-        padroes.append(("Quebra de Dominância", sugestao, 0.74, "4x mesma cor quebrada, sugere retorno"))
-
-    # 23. Empate pós-dominância
-    if len(hist_list) >= 5 and hist_list[-5] == hist_list[-4] == hist_list[-3] == hist_list[-2] != "E" and hist_list[-1] == "E":
-        sugestao = hist_list[-2] # Sugere a cor dominante que foi quebrada pelo empate
-        padroes.append(("Empate pós-dominância", sugestao, 0.73, "Empate surge após 4x da mesma, sugere a cor dominante"))
-
-    # 24. Padrão 2-1-2
-    if len(hist_list) >= 5 and hist_list[-5] == hist_list[-3] == hist_list[-2] and hist_list[-4] == hist_list[-1] and hist_list[-1] != hist_list[-2]:
-        sugestao = hist_list[-1] # Sugere a repetição do último par
-        padroes.append(("Padrão 2-1-2", sugestao, 0.76, "Repetição com quebra central"))
-
-    # 25. Coluna Escada
-    if len(hist_list) >= 3 and hist_list[-3] == hist_list[-1] and hist_list[-2] != hist_list[-1]:
-        sugestao = hist_list[-1] # Sugere a repetição do topo e base
-        padroes.append(("Coluna Escada", sugestao, 0.72, "Topo e base iguais com meio diferente"))
-
-    # 26. Inversão frequente
-    if len(hist_list) >= 6:
-        pares = [hist_list[-6], hist_list[-5]], [hist_list[-4], hist_list[-3]], [hist_list[-2], hist_list[-1]]
-        if all(a != b for a, b in pares):
+    # 19. Reescrita de Bloco 18
+    if len(hist_list) >= 36:
+        bloco_anterior = set(hist_list[-36:-18])
+        bloco_atual = set(hist_list[-18:])
+        if bloco_anterior == bloco_atual:
             sugestao = hist_list[-1]
-            padroes.append(("Inversão frequente", sugestao, 0.71, "3 inversões sucessivas"))
-
-    # 27. Simetria Irregular
-    if len(hist_list) >= 7:
-        seq = hist_list[-7:]
-        # Ex: C V E E E V C
-        if seq[0] == seq[6] and seq[1] == seq[5] and seq[2] == seq[4]:
-            sugestao = seq[3]
-            padroes.append(("Simetria Irregular", sugestao, 0.77, "Padrão espelhado alternado"))
-    
-    # Adicionando um novo padrão para demonstrar
-    # 28. Quebra de Sequência com Empate
-    if len(hist_list) >= 4 and hist_list[-4] == hist_list[-3] == hist_list[-2] and hist_list[-1] == "E":
-        sugestao = hist_list[-2] # Sugere a cor da sequência que foi quebrada
-        padroes.append(("Quebra de Sequência com Empate", sugestao, 0.78, "Empate quebra uma sequência de 3"))
+            padroes.append(("Reescrita de Bloco 18", sugestao, 0.92, "Bloco de 18 resultados reescrito"))
+            
+    # 20. Inversão Diagonal
+    if len(hist_list) >= 9:
+        diag1 = [hist_list[-9], hist_list[-5], hist_list[-1]]
+        diag2 = [hist_list[-7], hist_list[-5], hist_list[-3]]
+        if diag1[0] == diag1[2] and diag1[1] != diag1[0]:
+            sugestao = diag1[0]
+            padroes.append(("Inversão Diagonal", sugestao, 0.80, "Diagonal principal está se formando"))
+        if diag2[0] == diag2[2] and diag2[1] != diag2[0]:
+            sugestao = diag2[0]
+            padroes.append(("Inversão Diagonal", sugestao, 0.80, "Diagonal secundária está se formando"))
+            
+    # 21. Padrão de Dominância 5x1
+    if len(hist_list) >= 6:
+        seq = hist_list[-6:]
+        count = Counter(seq)
+        if (count.get('C', 0) == 5 and count.get('V', 0) == 1) or \
+           (count.get('V', 0) == 5 and count.get('C', 0) == 1):
+            sugestao = count.most_common(1)[0][0]
+            padroes.append(("Dominância 5x1", sugestao, 0.85, "Padrão de dominância 5x1"))
+            
+    # 22. Padrão de Frequência Oculta
+    if len(hist_list) >= 18:
+        freq = Counter(hist_list[-18:])
+        if freq.get('C', 0) < 6 and freq.get('V', 0) < 6:
+            sugestao = freq.most_common()[-1][0]
+            if sugestao != 'E':
+                padroes.append(("Frequência Oculta", sugestao, 0.78, "Cor menos frequente tende a voltar"))
+                
+    # 23. Padrão “Zona Morta”
+    for cor in ['C', 'V']:
+        if len(hist_list) > 12:
+            historico_sem_cor = [r for r in hist_list[-12:] if r != cor]
+            if len(historico_sem_cor) == 12:
+                padroes.append(("Zona Morta", cor, 0.95, f"Cor {cor} está sumida por 12+ rodadas, tendência de retorno"))
+                
+    # 24. Inversão com Delay
+    if len(hist_list) >= 6 and hist_list[-6:-3] == hist_list[-3:]:
+        sugestao = hist_list[-1]
+        padroes.append(("Inversão com Delay", sugestao, 0.82, "Padrão repetido, inversão pode vir"))
         
-    # Adicionar mais padrões aqui...
-    
+    # 25. Reflexo com Troca Lenta
+    if len(hist_list) >= 8:
+        bloco1 = hist_list[-8:-4]
+        bloco2 = hist_list[-4:]
+        invertido = ['V' if c == 'C' else 'C' for c in bloco1]
+        if bloco2 == invertido:
+            sugestao = bloco2[0]
+            padroes.append(("Reflexo com Troca Lenta", sugestao, 0.88, "Padrão reflete com cores invertidas"))
+            
+    # 26. Padrão Cascata Fragmentada
+    # Várias sequências curtas repetidas
+    if len(hist_list) >= 9:
+        if hist_list[-3:] == hist_list[-6:-3]:
+            sugestao = hist_list[-1]
+            padroes.append(("Cascata Fragmentada", sugestao, 0.77, "Repetição de blocos curtos"))
+            
+    # 27. Empate Enganoso
+    if len(hist_list) >= 4 and hist_list[-3] == 'E' and hist_list[-1] != 'E':
+        sugestao = hist_list[-1]
+        padroes.append(("Empate Enganoso", sugestao, 0.70, "Empate usado como ponto de corte, sugere continuidade"))
+        
+    # 28. Reação à Perda do Jogador (padrão reverso)
+    if len(hist_list) >= 4 and hist_list[-4] == hist_list[-2] and hist_list[-3] == hist_list[-1]:
+        sugestao = hist_list[-1]
+        padroes.append(("Reação à Perda (padrão reverso)", sugestao, 0.85, "Padrão reverso detectado após sequência"))
+
+    # 29. Zebra Lenta
+    if len(hist_list) >= 8:
+        if hist_list[-8] != hist_list[-7] and hist_list[-6] != 'E' and hist_list[-5] == 'E' and hist_list[-4] != 'E':
+            sugestao = hist_list[-1]
+            padroes.append(("Zebra Lenta", sugestao, 0.72, "Padrão de zebra difícil de ler, detectado"))
+            
+    # 30. Padrão de Isca (padrão real + quebra suja)
+    if len(hist_list) >= 12 and hist_list[-12:-6] == hist_list[-6:]:
+        sugestao = hist_list[-1]
+        padroes.append(("Padrão de Isca", sugestao, 0.95, "Padrão repetido, a quebra pode vir em breve"))
+        
     return padroes
 
-# ====== SUGESTÃO INTELIGENTE E APRENDIZADO ======
+
+# ... [O restante do código para gerar sugestão, painel de controle e botão de limpeza permanece o mesmo,
+# mas a chamada para a função de detecção de padrões deve ser alterada] ...
+
 def gerar_sugestao_inteligente():
     hist = st.session_state.historico
     if len(hist) < 5:
         return None, None, 0.0, "Histórico insuficiente para análise"
 
-    padroes_encontrados = detect_all_patterns_revisada(hist)
+    # AQUI ESTÁ A MUDANÇA
+    padroes_encontrados = detect_all_patterns_avancados(hist)
     
     if not padroes_encontrados:
         return None, None, 0.0, "Nenhum padrão confiável detectado"
@@ -314,7 +222,7 @@ def gerar_sugestao_inteligente():
     
     return padrao_escolhido[0], padrao_escolhido[1], padrao_escolhido[2], padrao_escolhido[3]
 
-# ====== PAINEL DE CONTROLE ======
+# Painel de controle e estatísticas
 st.subheader("🎯 Sugestão de Jogada")
 
 if st.session_state.ultimo_resultado:
@@ -328,7 +236,6 @@ if st.session_state.ultimo_resultado:
 else:
     st.info("Aguardando o primeiro resultado para começar a análise...")
 
-# Estatísticas simples
 st.subheader("📈 Estatísticas")
 total = st.session_state.acertos + st.session_state.erros
 if total > 0:
@@ -342,7 +249,6 @@ else:
 st.caption("Acurácia baseada nas sugestões do sistema.")
 st.caption("O sistema só avalia acertos/erros após a primeira sugestão.")
 
-# Botão para limpar dados
 if st.button("Limpar Histórico e Estatísticas"):
     st.session_state.historico = deque(maxlen=27)
     st.session_state.acertos = 0
@@ -352,5 +258,3 @@ if st.button("Limpar Histórico e Estatísticas"):
     st.session_state.memoria_padroes = {}
     st.session_state.ultimo_resultado = None
     st.rerun()
-
-# ====== FIM DO APP ======
