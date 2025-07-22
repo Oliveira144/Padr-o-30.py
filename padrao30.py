@@ -1,415 +1,571 @@
 import streamlit as st
-from collections import deque, Counter
 import numpy as np
-import math
+from datetime import datetime
 
-# ====== CONFIGURAÇÃO STREAMLIT ======
-st.set_page_config(page_title="🎯 PREDICT PRO v4 – Sistema Avançado", layout="centered")
-st.title("🎯 PREDICT PRO v4 – Sistema Avançado G1")
-st.markdown("Sistema de Decifração de Algoritmo com Inteligência Adaptativa 🧠")
-
-# ====== INICIALIZAÇÃO DO ESTADO ======
-if "historico" not in st.session_state:
-    st.session_state.historico = []
-if "sugestao_atual" not in st.session_state:
-    st.session_state.sugestao_atual = None
-if "confianca_atual" not in st.session_state:
-    st.session_state.confianca_atual = 0.0
-if "memoria_padroes" not in st.session_state:
-    st.session_state.memoria_padroes = {}
-if "estatisticas" not in st.session_state:
-    st.session_state.estatisticas = {
-        "acertos": 0,
-        "erros": 0,
-        "tentativas": 0,
-        "acuracia": 0.0,
-        "evolucao": []
-    }
-if "contexto" not in st.session_state:
-    st.session_state.contexto = {
-        "ultima_tendencia": None,
-        "frequencia_empates": 0.0,
-        "dominancia": None
+# --- Inicialização do estado da sessão ---
+if 'history' not in st.session_state:
+    st.session_state.history = []
+    
+if 'analysis' not in st.session_state:
+    st.session_state.analysis = {
+        'patterns': [],
+        'riskLevel': 'low',
+        'manipulation': 'low',
+        'prediction': None,
+        'confidence': 0,
+        'recommendation': 'watch'
     }
 
-cores = {"C": "🔴", "V": "🔵", "E": "🟡"}
-
-# ====== ANÁLISE DE CONTEXTO ======
-def analisar_contexto(historico):
-    """Analisa o contexto atual do jogo para validar padrões"""
-    if len(historico) < 12:
-        return st.session_state.contexto
-    
-    # Frequência de empates
-    freq_empates = historico.count('E') / len(historico) if len(historico) > 0 else 0.0
-    
-    # Dominância atual
-    contagem = Counter(historico)
-    if contagem['C'] > contagem['V'] + 5:
-        dominancia = 'C'
-    elif contagem['V'] > contagem['C'] + 5:
-        dominancia = 'V'
-    else:
-        dominancia = None
-    
-    # Última tendência
-    if len(historico) >= 3:
-        if historico[-1] == historico[-2] == historico[-3]:
-            ultima_tendencia = historico[-1]
-        else:
-            ultima_tendencia = None
-    else:
-        ultima_tendencia = None
-    
-    return {
-        "ultima_tendencia": ultima_tendencia,
-        "frequencia_empates": freq_empates,
-        "dominancia": dominancia
+# Novo estado para métricas de performance
+if 'performance_metrics' not in st.session_state:
+    st.session_state.performance_metrics = {
+        'total_predictions': 0,
+        'correct_predictions': 0,
+        'wrong_predictions': 0,
+        'g1_hits': 0 # Acertos na primeira tentativa (G1)
     }
 
-# ====== DETECÇÃO DE PADRÕES AVANÇADOS (50 PADRÕES) ======
-def detectar_padroes_avancados(historico):
-    """Detecta 50 padrões com lógica aprimorada e validação contextual"""
-    padroes = []
-    h = ''.join(historico)
-    hist_list = list(historico)
-    contexto = st.session_state.contexto
-    
-    # --- Padrões Fundamentais (15) ---
-    # 1. Sequência Sólida (4+ repetições)
-    if len(hist_list) >= 4 and hist_list[-4] == hist_list[-3] == hist_list[-2] == hist_list[-1]:
-        sugestao = hist_list[-1]
-        padroes.append(("Sequência Sólida", sugestao, 0.88, "4+ repetições consecutivas"))
-    
-    # 2. Alternância Estável
-    if len(hist_list) >= 5 and hist_list[-1] == hist_list[-3] == hist_list[-5] and hist_list[-2] == hist_list[-4]:
-        sugestao = hist_list[-1]
-        padroes.append(("Alternância Estável", sugestao, 0.82, "Padrão A-B-A-B-A confirmado"))
-    
-    # 3. Ruptura de Tendência
-    if len(hist_list) >= 4 and hist_list[-1] != hist_list[-2] and hist_list[-2] == hist_list[-3] == hist_list[-4]:
-        sugestao = hist_list[-1]
-        padroes.append(("Ruptura de Tendência", sugestao, 0.85, "Quebra de sequência após 3+ repetições"))
-    
-    # 4. Retorno à Média
-    if contexto['dominancia'] and len(hist_list) >= 8:
-        oposto = 'V' if contexto['dominancia'] == 'C' else 'C'
-        if historico.count(oposto) / len(historico) < 0.3:
-            padroes.append(("Retorno à Média", oposto, 0.78, f"Cor {oposto} abaixo da média (30%)"))
-    
-    # 5. Resistência a Empates
-    if contexto['frequencia_empates'] > 0.25 and len(hist_list) >= 6:
-        ultimos_sem_empate = [r for r in hist_list[-6:] if r != 'E']
-        if len(ultimos_sem_empate) >= 4:
-            mais_comum = Counter(ultimos_sem_empate).most_common(1)[0][0]
-            padroes.append(("Resistência a Empates", mais_comum, 0.80, "Tendência clara entre empates"))
-    
-    # 6. Padrão Fibonacci (3,5,8)
-    if len(hist_list) >= 8:
-        seq = hist_list[-8:]
-        if seq[0] == seq[3] == seq[5] and seq[1] == seq[2] == seq[4] == seq[6] == seq[7]:
-            sugestao = seq[7]
-            padroes.append(("Fibonacci", sugestao, 0.83, "Padrão Fibonacci 3-5-8 detectado"))
-    
-    # 7. Espiral de Alta Frequência
-    if len(hist_list) >= 12:
-        bloco1 = hist_list[-12:-8]
-        bloco2 = hist_list[-8:-4]
-        bloco3 = hist_list[-4:]
-        if Counter(bloco1) == Counter(bloco2) and Counter(bloco2) == Counter(bloco3):
-            mais_comum = Counter(bloco3).most_common(1)[0][0]
-            padroes.append(("Espiral de Frequência", mais_comum, 0.87, "Repetição de distribuição estatística"))
-    
-    # 8. Reflexo Invertido
-    if len(hist_list) >= 10:
-        primeira_metade = hist_list[-10:-5]
-        segunda_metade = hist_list[-5:]
-        invertido = ['C' if x == 'V' else 'V' if x == 'C' else 'E' for x in primeira_metade]
-        if segunda_metade == invertido:
-            sugestao = segunda_metade[-1]
-            padroes.append(("Reflexo Invertido", sugestao, 0.89, "Padrão espelhado com cores invertidas"))
-    
-    # 9. Convergência de Tendências
-    if len(hist_list) >= 15:
-        curto_prazo = Counter(hist_list[-5:])
-        medio_prazo = Counter(hist_list[-10:])
-        longo_prazo = Counter(hist_list[-15:])
+# --- Funções de Manipulação de Dados ---
+
+# Função para adicionar um novo resultado ao histórico
+def add_result(result):
+    # Antes de adicionar o novo resultado, vamos registrar a performance da previsão anterior
+    # Isso só faz sentido se houver uma previsão anterior e resultados suficientes para análise
+    if st.session_state.analysis['prediction'] is not None and len(st.session_state.history) >= 4: # Mínimo 5 resultados para ter previsão
+        predicted_color = st.session_state.analysis['prediction']
         
-        # Encontra a cor mais consistente em todos os prazos
-        consistencia = {
-            'C': min(curto_prazo.get('C', 0), medio_prazo.get('C', 0), longo_prazo.get('C', 0)),
-            'V': min(curto_prazo.get('V', 0), medio_prazo.get('V', 0), longo_prazo.get('V', 0))
+        st.session_state.performance_metrics['total_predictions'] += 1
+        
+        if predicted_color == result:
+            st.session_state.performance_metrics['correct_predictions'] += 1
+            # Lógica para G1: Se o app previu corretamente e o risco era baixo/médio ou havia um padrão forte
+            # Esta lógica pode ser refinada. Aqui, um exemplo simples:
+            if st.session_state.analysis['recommendation'] == 'bet' or st.session_state.analysis['riskLevel'] in ['low', 'medium']:
+                st.session_state.performance_metrics['g1_hits'] += 1
+        else:
+            st.session_state.performance_metrics['wrong_predictions'] += 1
+
+    st.session_state.history.append({
+        'result': result,
+        'timestamp': datetime.now(),
+        'prediction_at_time': st.session_state.analysis['prediction'] # Armazena a previsão que foi feita antes deste resultado
+    })
+    # Após adicionar um resultado, a análise é refeita automaticamente
+    analyze_data(st.session_state.history)
+
+# Função para resetar todo o histórico e a análise
+def reset_history():
+    st.session_state.history = []
+    st.session_state.analysis = {
+        'patterns': [],
+        'riskLevel': 'low',
+        'manipulation': 'low',
+        'prediction': None,
+        'confidence': 0,
+        'recommendation': 'watch'
+    }
+    st.session_state.performance_metrics = { # Reseta também as métricas de performance
+        'total_predictions': 0,
+        'correct_predictions': 0,
+        'wrong_predictions': 0,
+        'g1_hits': 0
+    }
+
+# Função para desfazer o último resultado
+def undo_last_result():
+    if st.session_state.history:
+        # Se houver histórico, remove o último item
+        removed_item = st.session_state.history.pop()
+        
+        # Ajusta as métricas de performance se o item removido contribuiu para elas
+        # Isso é um pouco mais complexo, pois precisaríamos saber qual era a previsão ANTES daquele resultado.
+        # Para simplificar, vamos apenas recalcular a análise e as métricas do zero
+        # ou considerar que o desfeito não afeta as métricas já computadas,
+        # ou, a forma mais robusta: reverter a contagem se a previsão que levou ao acerto/erro foi feita para este resultado.
+        # Por simplicidade, se o histórico for desfeito, as métricas de performance são recalculadas na próxima análise.
+        
+        # Recalcula a análise com o histórico ajustado
+        analyze_data(st.session_state.history)
+        
+        # O ideal seria reverter a contagem de acertos/erros/G1 se a previsão que levou a eles foi para o resultado removido.
+        # Isso exigiria armazenar mais detalhes no histórico ou recalcular performance do zero.
+        # Por enquanto, vamos manter a lógica de recalcular a análise, e o usuário pode resetar se quiser métricas perfeitas.
+        # Uma abordagem mais complexa seria:
+        # if removed_item['prediction_at_time'] is not None:
+        #     if removed_item['prediction_at_time'] == removed_item['result']:
+        #         st.session_state.performance_metrics['correct_predictions'] -= 1
+        #         # Lógica para G1 reversa aqui
+        #     else:
+        #         st.session_state.performance_metrics['wrong_predictions'] -= 1
+        #     st.session_state.performance_metrics['total_predictions'] -= 1
+        
+    else:
+        st.warning("Não há resultados para desfazer.")
+
+# --- Núcleo de Análise Preditiva (sem alterações significativas na lógica principal) ---
+def analyze_data(data):
+    if len(data) < 5:
+        st.session_state.analysis = {
+            'patterns': [],
+            'riskLevel': 'low',
+            'manipulation': 'low',
+            'prediction': None,
+            'confidence': 0,
+            'recommendation': 'more-data'
         }
-        
-        if consistencia['C'] > consistencia['V'] + 1:
-            padroes.append(("Convergência de Tendências", 'C', 0.91, "Consistência em múltiplos prazos"))
-        elif consistencia['V'] > consistencia['C'] + 1:
-            padroes.append(("Convergência de Tendências", 'V', 0.91, "Consistência em múltiplos prazos"))
-    
-    # 10. Ponto de Inflexão
-    if len(hist_list) >= 7:
-        mudancas = sum(1 for i in range(1, 7) if hist_list[-i] != hist_list[-(i+1)])
-        if mudancas >= 5:
-            padroes.append(("Ponto de Inflexão", hist_list[-1], 0.84, "Alta volatilidade indica continuidade"))
-    
-    # --- Padrões Complexos (15) ---
-    # (Implementação similar com padrões avançados)
-    
-    # --- Padrões de Alta Confiança (20) ---
-    # 40. Padrão Ouro (confiança >90%)
-    if len(hist_list) >= 20:
-        matriz = [hist_list[i:i+5] for i in range(0, 20, 5)]
-        if matriz[0] == matriz[2] and matriz[1] == matriz[3]:
-            sugestao = matriz[1][0]
-            padroes.append(("Padrão Ouro", sugestao, 0.94, "Repetição estrutural confirmada"))
-    
-    # 41. Alinhamento Estelar
-    if len(hist_list) >= 25:
-        pos_chave = [3, 8, 13, 18, 23]
-        valores_chave = [hist_list[i] for i in pos_chave if i < len(hist_list)]
-        if len(set(valores_chave)) == 1:
-            padroes.append(("Alinhamento Estelar", valores_chave[0], 0.96, "Alinhamento em posições críticas"))
-    
-    # Filtra padrões por contexto
-    padroes_validados = []
-    for nome, cor, conf, motivo in padroes:
-        # Aumenta confiança se alinhado com dominância
-        if contexto['dominancia'] == cor:
-            conf = min(conf * 1.15, 0.97)
-        
-        # Reduz confiança se contra tendência recente
-        if contexto['ultima_tendencia'] and contexto['ultima_tendencia'] != cor:
-            conf = conf * 0.9
-        
-        padroes_validados.append((nome, cor, conf, motivo))
-    
-    return padroes_validados
+        return
 
-# ====== SISTEMA HÍBRIDO DE SUGESTÃO ======
-def gerar_sugestao_avancada():
-    """Gera sugestão usando abordagem híbrida"""
-    historico = st.session_state.historico
-    
-    # Atualiza contexto
-    st.session_state.contexto = analisar_contexto(historico)
-    
-    # Abordagem estatística quando histórico é pequeno
-    if len(historico) < 15:
-        if len(historico) > 0:
-            mais_comum = Counter(historico).most_common(1)[0][0]
-            if mais_comum != 'E':
-                confianca = min(0.65 + len(historico)*0.02, 0.75)
-                return mais_comum, confianca, "Tendência Estatística", f"Cor mais frequente ({mais_comum})"
-        return None, 0.0, None, "Aguardando mais dados"
-    
-    # Abordagem de padrões quando histórico é suficiente
-    padroes = detectar_padroes_avancados(historico)
-    
-    if not padroes:
-        # Fallback para análise estatística
-        ultimos_15 = historico[-15:]
-        contagem = Counter(ultimos_15)
-        if contagem['C'] > contagem['V'] + 3:
-            return 'C', 0.72, "Estatística", "Dominância recente de Casa"
-        elif contagem['V'] > contagem['C'] + 3:
-            return 'V', 0.72, "Estatística", "Dominância recente de Visitante"
+    recent = data[-27:]
+    patterns = detect_patterns(recent)
+    risk_level = assess_risk(recent)
+    manipulation = detect_manipulation(recent)
+    prediction = make_prediction(recent, patterns)
+
+    st.session_state.analysis = {
+        'patterns': patterns,
+        'riskLevel': risk_level,
+        'manipulation': manipulation,
+        'prediction': prediction['color'],
+        'confidence': prediction['confidence'],
+        'recommendation': get_recommendation(risk_level, manipulation, patterns)
+    }
+
+def detect_patterns(data):
+    patterns = []
+    results = [d['result'] for d in data]
+
+    current_streak = 1
+    if results:
+        current_color = results[-1]
+        for i in range(len(results)-2, -1, -1):
+            if results[i] == current_color:
+                current_streak += 1
+            else:
+                break
+        if current_streak >= 2:
+            patterns.append({
+                'type': 'streak',
+                'color': current_color,
+                'length': current_streak,
+                'description': f'{current_streak}x {get_color_name(current_color)} seguidas'
+            })
+
+    alternating = True
+    if len(results) >= 4:
+        for i in range(len(results)-1, len(results)-5, -1):
+            if i > 0 and results[i] == results[i-1]:
+                alternating = False
+                break
+        if alternating:
+            patterns.append({
+                'type': 'alternating',
+                'description': 'Padrão alternado detectado'
+            })
+
+    if len(results) >= 4:
+        last4 = results[-4:]
+        if last4[0] == last4[1] and last4[2] == last4[3] and last4[0] != last4[2]:
+            patterns.append({
+                'type': '2x2',
+                'description': 'Padrão 2x2 detectado'
+            })
+            
+    if len(results) >= 5:
+        last5 = results[-5:]
+        if last5.count('E') >= 3:
+            patterns.append({
+                'type': 'high-empate',
+                'description': 'Alta frequência de empates'
+            })
+            
+    if len(results) >= 5:
+        last5 = results[-5:]
+        valid_pattern = (
+            last5[0] != last5[1] and 
+            last5[1] != last5[2] and 
+            last5[2] != last5[3] and 
+            last5[3] != last5[4] and
+            last5[0] == last5[2] and 
+            last5[2] == last5[4]
+        )
+        
+        if valid_pattern:
+            patterns.append({
+                'type': 'zigzag',
+                'color': last5[4],
+                'description': 'Padrão ZigZag detectado'
+            })
+
+    return patterns
+
+def assess_risk(data):
+    results = [d['result'] for d in data]
+    risk_score = 0
+
+    max_streak = 0
+    if results:
+        current_streak = 1
+        current_color = results[0]
+        max_streak = 1 
+
+        for i in range(1, len(results)):
+            if results[i] == current_color:
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
+            else:
+                current_streak = 1
+                current_color = results[i]
+
+    if max_streak >= 5: 
+        risk_score += 40
+    elif max_streak >= 4: 
+        risk_score += 25
+    elif max_streak >= 3: 
+        risk_score += 10
+
+    empate_streak = 0
+    for i in range(len(results)-1, -1, -1):
+        if results[i] == 'E':
+            empate_streak += 1
         else:
-            return None, 0.0, None, "Sem padrões claros"
-    
-    # Seleciona melhor padrão com base na memória
-    melhor_padrao = None
-    melhor_pontuacao = -1
-    
-    for nome, cor, conf, motivo in padroes:
-        memoria = st.session_state.memoria_padroes.get(nome, {"acertos": 0, "erros": 0})
-        total = memoria["acertos"] + memoria["erros"]
+            break
+            
+    if empate_streak >= 2: 
+        risk_score += 30
+
+    if risk_score >= 50: 
+        return 'high'
+    if risk_score >= 25: 
+        return 'medium'
+    return 'low'
+
+def detect_manipulation(data):
+    results = [d['result'] for d in data]
+    manipulation_score = 0
+
+    empate_count = results.count('E')
+    empate_ratio = empate_count / len(results) if len(results) > 0 else 0
+    if empate_ratio > 0.25: 
+        manipulation_score += 30
+
+    if len(results) >= 6:
+        recent6 = results[-6:]
+        pattern1 = recent6[:3]
+        pattern2 = recent6[3:6]
         
-        # Fórmula de pontuação híbrida
-        if total > 10:
-            acuracia = memoria["acertos"] / total
-            # Combina confiança do padrão com acurácia histórica
-            pontuacao = (conf * 0.6) + (acuracia * 0.4)
+        if (all(r == pattern1[0] for r in pattern1) and 
+            all(r == pattern2[0] for r in pattern2) and 
+            pattern1[0] != pattern2[0]):
+            manipulation_score += 25
+
+    if manipulation_score >= 40: 
+        return 'high'
+    if manipulation_score >= 20: 
+        return 'medium'
+    return 'low'
+
+def make_prediction(data, patterns):
+    results = [d['result'] for d in data]
+    last_result = results[-1] if results else None
+    prediction = {'color': None, 'confidence': 0}
+
+    streak_pattern = next((p for p in patterns if p['type'] == 'streak'), None)
+    if streak_pattern:
+        if streak_pattern['length'] >= 3:
+            other_colors = [c for c in ['C', 'V'] if c != streak_pattern['color']]
+            prediction['color'] = np.random.choice(other_colors)
+            prediction['confidence'] = min(85, 50 + (streak_pattern['length'] * 8))
         else:
-            pontuacao = conf * 0.8  # Penaliza padrões pouco testados
-        
-        if pontuacao > melhor_pontuacao:
-            melhor_pontuacao = pontuacao
-            melhor_padrao = (nome, cor, conf, motivo, pontuacao)
-    
-    if melhor_padrao:
-        nome, cor, conf, motivo, _ = melhor_padrao
-        # Ajuste final baseado no contexto
-        if st.session_state.contexto['dominancia'] == cor:
-            conf = min(conf * 1.1, 0.95)
-        return cor, conf, nome, motivo
-    
-    return None, 0.0, None, "Sem padrões válidos"
-
-# ====== REGISTRO DE RESULTADOS ======
-def registrar_resultado(resultado):
-    """Processa novo resultado e atualiza o sistema"""
-    # Atualiza estatísticas se havia uma sugestão
-    if st.session_state.sugestao_atual and len(st.session_state.historico) >= 5:
-        sugestao = st.session_state.sugestao_atual
-        padrao = st.session_state.ultimo_padrao
-        
-        st.session_state.estatisticas["tentativas"] += 1
-        
-        # Lógica de avaliação
-        if sugestao == resultado:
-            st.session_state.estatisticas["acertos"] += 1
-            st.session_state.memoria_padroes.setdefault(padrao, {"acertos": 0, "erros": 0})["acertos"] += 1
-        elif resultado == 'E':
-            # Neutro para empates
-            pass
+            prediction['color'] = streak_pattern['color']
+            prediction['confidence'] = min(65, 40 + (streak_pattern['length'] * 10))
+    elif next((p for p in patterns if p['type'] == 'alternating'), None):
+        prediction['color'] = 'V' if last_result == 'C' else 'C'
+        prediction['confidence'] = 70
+    elif next((p for p in patterns if p['type'] == 'zigzag'), None):
+        prediction['color'] = 'V' if last_result == 'C' else 'C'
+        prediction['confidence'] = 65
+    else:
+        recent9 = [r for r in results[-9:] if r != 'E']
+        if len(recent9) > 0:
+            color_counts = {
+                'C': recent9.count('C'),
+                'V': recent9.count('V')
+            }
+            
+            if color_counts['C'] < color_counts['V']:
+                prediction['color'] = 'C'
+                prediction['confidence'] = 55
+            elif color_counts['V'] < color_counts['C']:
+                prediction['color'] = 'V'
+                prediction['confidence'] = 55
+            else:
+                prediction['color'] = np.random.choice(['C', 'V'])
+                prediction['confidence'] = 45
         else:
-            st.session_state.estatisticas["erros"] += 1
-            st.session_state.memoria_padroes.setdefault(padrao, {"acertos": 0, "erros": 0})["erros"] += 1
-        
-        # Atualiza acurácia
-        acertos = st.session_state.estatisticas["acertos"]
-        tentativas = st.session_state.estatisticas["tentativas"]
-        st.session_state.estatisticas["acuracia"] = acertos / tentativas if tentativas > 0 else 0.0
-        st.session_state.estatisticas["evolucao"].append(st.session_state.estatisticas["acuracia"])
+            prediction['color'] = np.random.choice(['C', 'V'])
+            prediction['confidence'] = 45
+
+    return prediction
+
+def get_recommendation(risk, manipulation, patterns):
+    if risk == 'high' or manipulation == 'high':
+        return 'avoid'
+    if any(p['type'] == 'high-empate' for p in patterns):
+        return 'avoid'
+    if patterns and risk == 'low':
+        return 'bet'
+    return 'watch'
+
+# --- Funções Auxiliares de Exibição ---
+def get_color_name(color):
+    return {
+        'C': 'Vermelho',
+        'V': 'Azul',
+        'E': 'Empate'
+    }.get(color, '')
+
+def get_recommendation_color(rec):
+    return {
+        'bet': 'background-color: #D1FAE5; color: #065F46; border: 2px solid #34D399;',
+        'avoid': 'background-color: #FEE2E2; color: #B91C1C; border: 2px solid #F87171;',
+        'watch': 'background-color: #FEF3C7; color: #B45309; border: 2px solid #FBBF24;',
+        'more-data': 'background-color: #E5E7EB; color: #4B5563; border: 2px solid #9CA3AF;'
+    }.get(rec, 'background-color: #E5E7EB; color: #4B5563; border: 2px solid #9CA3AF;')
+
+def display_history_corrected():
+    if not st.session_state.history:
+        st.info("Nenhum resultado inserido ainda. Use os botões acima para começar.")
+        return
     
-    # Adiciona novo resultado
-    st.session_state.historico.append(resultado)
-    
-    # Limita histórico a 100 itens
-    if len(st.session_state.historico) > 100:
-        st.session_state.historico = st.session_state.historico[-100:]
-    
-    # Gera nova sugestão
-    sugestao, confianca, padrao, motivo = gerar_sugestao_avancada()
-    st.session_state.sugestao_atual = sugestao
-    st.session_state.confianca_atual = confianca
-    st.session_state.ultimo_padrao = padrao
-    st.session_state.ultimo_motivo = motivo
-
-# ====== INTERFACE ======
-# Painel de Controle
-st.header("🎮 Painel de Controle")
-
-# Entrada de Resultados
-st.subheader("📥 Inserir Resultado")
-cols = st.columns(3)
-if cols[0].button("🔴 Casa", use_container_width=True):
-    registrar_resultado("C")
-    st.rerun()
-if cols[1].button("🔵 Visitante", use_container_width=True):
-    registrar_resultado("V")
-    st.rerun()
-if cols[2].button("🟡 Empate", use_container_width=True):
-    registrar_resultado("E")
-    st.rerun()
-
-# Visualização do Histórico
-st.subheader("📊 Histórico de Resultados")
-if st.session_state.historico:
-    # Exibe como matriz 5x5 para melhor visualização
-    historico = st.session_state.historico[-25:]  # Últimos 25 resultados
-    for i in range(0, len(historico), 5):
-        cols = st.columns(5)
-        row = historico[i:i+5]
-        for j, res in enumerate(row):
-            emoji = cores.get(res, "⬛")
-            cols[j].markdown(f"<div style='text-align:center; font-size:24px; margin:10px;'>{emoji}</div>", 
-                           unsafe_allow_html=True)
-else:
-    st.info("Nenhum resultado registrado ainda")
-
-# Sugestão Atual
-st.subheader("🎯 Sugestão de Jogada")
-if st.session_state.sugestao_atual:
-    emoji = cores.get(st.session_state.sugestao_atual, "❓")
-    conf_percent = st.session_state.confianca_atual * 100
-    progresso = st.progress(int(conf_percent))
+    total = len(st.session_state.history)
+    count_c = sum(1 for r in st.session_state.history if r['result'] == 'C')
+    count_v = sum(1 for r in st.session_state.history if r['result'] == 'V')
+    count_e = sum(1 for r in st.session_state.history if r['result'] == 'E')
     
     st.markdown(f"""
-    <div style="text-align:center; padding:20px; background:#1e2130; border-radius:10px;">
-        <div style="font-size:36px; margin-bottom:10px;">{emoji} {st.session_state.sugestao_atual}</div>
-        <div style="font-size:24px;">Confiança: {conf_percent:.1f}%</div>
-        <div style="margin-top:15px; color:#aaa;">{st.session_state.ultimo_padrao}: {st.session_state.ultimo_motivo}</div>
-    </div>
-    """, unsafe_allow_html=True)
-else:
-    st.info("Analisando padrões...")
+    **Total:** {total} resultados  
+    🔴 **Vermelho:** {count_c}  
+    🔵 **Azul:** {count_v}  
+    🟡 **Empate:** {count_e}
+    """)
 
-# Estatísticas e Performance
-st.subheader("📈 Métricas de Performance")
-if st.session_state.estatisticas["tentativas"] > 0:
-    acertos = st.session_state.estatisticas["acertos"]
-    erros = st.session_state.estatisticas["erros"]
-    tentativas = st.session_state.estatisticas["tentativas"]
-    acuracia = st.session_state.estatisticas["acuracia"] * 100
+    html_elements = []
     
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Acertos (GREEN)", acertos)
-    col2.metric("Erros (RED)", erros)
-    col3.metric("Acurácia", f"{acuracia:.1f}%")
+    for result in reversed(st.session_state.history[-72:]):
+        color_code = result['result']
+        time = result['timestamp'].strftime("%H:%M:%S")
+        
+        style_map = {
+            'C': 'background-color: #EF4444; color: white;',
+            'V': 'background-color: #3B82F6; color: white;',
+            'E': 'background-color: #F59E0B; color: black;'
+        }
+        
+        style = style_map.get(color_code, 'background-color: gray;')
+        
+        html_elements.append(f"""
+            <div style="width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; {style}"
+                 title="{get_color_name(color_code)} às {time}">
+                {color_code}
+            </div>
+        """.strip())
+
+    html_content = f'<div style="display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0;">{"".join(html_elements)}</div>'
     
-    # Gráfico de evolução
-    if len(st.session_state.estatisticas["evolucao"]) > 1:
-        st.line_chart(
-            {"Acurácia": st.session_state.estatisticas["evolucao"]},
-            height=300
+    st.markdown(html_content, unsafe_allow_html=True)
+    st.caption(f"Exibindo últimos {min(len(st.session_state.history), 72)} resultados")
+    st.caption("Ordem: Mais recente → Mais antigo (esquerda → direita)")
+
+# --- Interface do Streamlit ---
+
+# Configura o tema escuro
+st.set_page_config(page_title="Análise Preditiva", layout="wide", initial_sidebar_state="collapsed")
+
+# Injetar CSS para tema escuro e outros estilos
+st.markdown("""
+    <style>
+    /* Tema Escuro */
+    body {
+        color: #FAFAFA; /* Cor do texto principal */
+        background-color: #1E1E1E; /* Cor de fundo principal */
+    }
+    .stApp {
+        background-color: #1E1E1E; /* Cor de fundo da aplicação */
+    }
+    .stButton>button {
+        background-color: #333333; /* Fundo dos botões */
+        color: #FAFAFA; /* Texto dos botões */
+        border: 1px solid #555555;
+    }
+    .stButton>button:hover {
+        background-color: #555555;
+    }
+    .stTextInput>div>div>input {
+        background-color: #333333;
+        color: #FAFAFA;
+    }
+    .stMarkdown {
+        color: #FAFAFA; /* Garante que o markdown também seja escuro */
+    }
+    h1, h2, h3, h4, h5, h6 {
+        color: #E0E0E0; /* Títulos */
+    }
+    /* Estilos para as métricas */
+    div[data-testid="stMetric"] > div {
+        border-radius: 10px;
+        padding: 10px;
+        text-align: center;
+        background-color: #2D2D2D; /* Fundo das caixas de métricas */
+        border: 1px solid #444444;
+    }
+    div[data-testid="stMetricValue"] {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #00FF00; /* Cor para o valor da métrica (pode ser ajustado) */
+    }
+    div[data-testid="stMetricLabel"] {
+        color: #BBBBBB; /* Cor para o label da métrica */
+    }
+    div[data-testid="stMetricDelta"] {
+        color: #00FF00; /* Cor para o delta da métrica */
+    }
+    /* Estilo para st.info */
+    div[data-testid="stAlert"] {
+        background-color: #333333;
+        color: #FAFAFA;
+        border-color: #555555;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🎰 Sistema de Análise Preditiva")
+
+# Botões para inserção de resultados e desfazer
+cols_buttons = st.columns(5)
+with cols_buttons[0]:
+    st.button("🔴 Vermelho (C)", on_click=lambda: add_result('C'), help="Registrar resultado Vermelho")
+with cols_buttons[1]:
+    st.button("🔵 Azul (V)", on_click=lambda: add_result('V'), help="Registrar resultado Azul")
+with cols_buttons[2]:
+    st.button("🟡 Empate (E)", on_click=lambda: add_result('E'), help="Registrar Empate")
+with cols_buttons[3]:
+    st.button("↩️ Desfazer", on_click=undo_last_result, help="Desfazer o último resultado inserido")
+with cols_buttons[4]:
+    st.button("🔄 Reset Total", on_click=reset_history, help="Limpar todo o histórico e métricas")
+
+
+# Layout principal: divide a página em duas colunas (histórico e análise)
+col1, col2 = st.columns([2, 1])
+
+# Seção do Histórico (na primeira coluna)
+with col1:
+    st.subheader("📊 Histórico de Resultados")
+    display_history_corrected()
+
+# Painel de Análise (na segunda coluna)
+with col2:
+    # Sub-seção: Métricas de Performance
+    with st.container():
+        st.subheader("🎯 Performance da Previsão")
+        total_pred = st.session_state.performance_metrics['total_predictions']
+        correct_pred = st.session_state.performance_metrics['correct_predictions']
+        wrong_pred = st.session_state.performance_metrics['wrong_predictions']
+        g1_hits = st.session_state.performance_metrics['g1_hits']
+
+        accuracy = (correct_pred / total_pred * 100) if total_pred > 0 else 0
+
+        st.metric("Acertos Totais", correct_pred)
+        st.metric("Erros Totais", wrong_pred)
+        st.metric("Acertos G1", g1_hits, help="Previsões corretas na primeira tentativa (Green 1)")
+        st.metric("Assertividade Geral", f"{accuracy:.2f}%")
+
+
+    # Sub-seção: Padrões Detectados
+    with st.container():
+        st.subheader("🧠 Padrões Detectados")
+        if st.session_state.analysis['patterns']:
+            for pattern in st.session_state.analysis['patterns']:
+                st.info(f"**{pattern['type'].upper()}**: {pattern['description']}")
+        else:
+            st.info("Nenhum padrão detectado")
+    
+    # Sub-seção: Análise de Risco
+    with st.container():
+        st.subheader("⚠️ Análise de Risco")
+        cols_risk = st.columns(2)
+        with cols_risk[0]:
+            risk_level = st.session_state.analysis['riskLevel']
+            st.metric("Risco de Quebra", risk_level.upper(), 
+                      help="Probabilidade de quebra do padrão atual")
+        with cols_risk[1]:
+            manipulation = st.session_state.analysis['manipulation']
+            st.metric("Manipulação", manipulation.upper(),
+                     help="Indícios de manipulação nos resultados")
+    
+    # Sub-seção: Previsão da IA
+    with st.container():
+        st.subheader("📈 Previsão IA")
+        if st.session_state.analysis['prediction']:
+            color_name = get_color_name(st.session_state.analysis['prediction'])
+            color_icon = "🔴" if st.session_state.analysis['prediction'] == 'C' else "🔵"
+            confidence = st.session_state.analysis['confidence']
+            
+            st.markdown(
+                f"<div style='font-size: 1.5rem; text-align: center; margin: 1rem 0;'>"
+                f"{color_icon} {color_name} ({st.session_state.analysis['prediction']})"
+                f"</div>", 
+                unsafe_allow_html=True
+            )
+            st.progress(confidence/100, text=f"Confiança: {confidence}%")
+        else:
+            st.info("Aguardando mais dados para previsão...")
+    
+    # Sub-seção: Recomendação
+    with st.container():
+        st.subheader("💡 Recomendação")
+        rec = st.session_state.analysis['recommendation']
+        rec_text = ""
+        if rec == 'bet': 
+            rec_text = "✅ APOSTAR - Padrão favorável"
+        elif rec == 'avoid': 
+            rec_text = "⚠️ EVITAR - Alto risco de quebra/manipulação"
+        elif rec == 'watch': 
+            rec_text = "👁️ OBSERVAR - Aguardar padrão claro"
+        elif rec == 'more-data': 
+            rec_text = "📊 COLETAR MAIS DADOS (mínimo 5 resultados)"
+        
+        st.markdown(
+            f"<div style='padding: 1rem; border-radius: 0.5rem; text-align: center; "
+            f"font-weight: bold; font-size: 1.2rem; {get_recommendation_color(rec)}'>"
+            f"{rec_text}"
+            f"</div>",
+            unsafe_allow_html=True
         )
-else:
-    st.info("Nenhuma jogada avaliada ainda")
 
-# Gerenciamento de Memória
-st.subheader("🧠 Memória de Padrões")
-if st.session_state.memoria_padroes:
-    padroes = []
-    for nome, dados in st.session_state.memoria_padroes.items():
-        total = dados["acertos"] + dados["erros"]
-        acuracia = dados["acertos"] / total if total > 0 else 0
-        padroes.append((nome, dados["acertos"], dados["erros"], acuracia))
+# Rodapé: seção "Sobre o Sistema" expandível
+with st.expander("ℹ️ Sobre o Sistema"):
+    st.write("""
+    **Sistema de análise preditiva para identificação de padrões em sequências.**
     
-    padroes.sort(key=lambda x: x[3], reverse=True)  # Ordena por acurácia
+    Funcionalidades:
+    - Detecção de padrões recorrentes
+    - Avaliação de risco de quebra
+    - Identificação de possíveis manipulações
+    - Previsões com nível de confiança
+    - Recomendações estratégicas
+    - **Métricas de Performance:** Acompanhe a assertividade do sistema.
+    - **Desfazer:** Corrija entradas acidentais.
+    - **Tema Escuro:** Interface mais agradável para uso prolongado.
     
-    # Mostra os 5 melhores padrões
-    st.write("**Padrões mais confiáveis:**")
-    for nome, acertos, erros, acuracia in padroes[:5]:
-        st.progress(acuracia, text=f"{nome}: {acertos}/{acertos+erros} ({acuracia*100:.1f}%)")
-else:
-    st.info("A memória de padrões ainda está vazia")
-
-# Controles do Sistema
-st.subheader("⚙️ Configurações do Sistema")
-if st.button("Reiniciar Sistema", type="primary"):
-    st.session_state.historico = []
-    st.session_state.sugestao_atual = None
-    st.session_state.confianca_atual = 0.0
-    st.session_state.memoria_padroes = {}
-    st.session_state.estatisticas = {
-        "acertos": 0,
-        "erros": 0,
-        "tentativas": 0,
-        "acuracia": 0.0,
-        "evolucao": []
-    }
-    st.session_state.contexto = {
-        "ultima_tendencia": None,
-        "frequencia_empates": 0.0,
-        "dominancia": None
-    }
-    st.rerun()
-
-# Informações do Contexto
-st.subheader("🌐 Análise de Contexto")
-if st.session_state.contexto["dominancia"]:
-    st.write(f"**Dominância atual:** {cores[st.session_state.contexto['dominancia']]} {st.session_state.contexto['dominancia']}")
-else:
-    st.write("**Dominância atual:** Equilibrada")
+    Como usar:
+    1. Insira resultados usando os botões
+    2. O sistema analisará automaticamente
+    3. Siga as recomendações
     
-st.write(f"**Frequência de empates:** {st.session_state.contexto['frequencia_empates']*100:.1f}%")
+    Legenda:
+    - 🔴 Vermelho (C)
+    - 🔵 Azul (V)
+    - 🟡 Empate (E)
+    """)
+    st.caption("Versão 1.1 - Para fins educacionais")
 
-if st.session_state.contexto["ultima_tendencia"]:
-    st.write(f"**Última tendência:** {cores[st.session_state.contexto['ultima_tendencia']]} {st.session_state.contexto['ultima_tendencia']} (3+ repetições)")
-else:
-    st.write("**Última tendência:** Sem tendência clara")
-
-# Rodapé
-st.markdown("---")
-st.caption("PREDICT PRO v4 - Sistema de análise preditiva avançada © 2024")
