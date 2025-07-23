@@ -249,7 +249,7 @@ def detect_patterns(data):
     # Alta frequência de Empates (em uma janela maior para ser mais robusto)
     empate_count_recent = results[-15:].count('E') # Conta empates nos últimos 15 resultados
     # Se a proporção de empates for alta em um número razoável de resultados
-    if len(results[-15:]) >= 7 and (empate_count_recent / len(results[-15:])) > 0.35: # Más de 35% de empates
+    if len(results[-15:]) >= 7 and (empate_count_recent / len(results[-15:])) > 0.35: # Mais de 35% de empates
         patterns.append({
             'type': 'high-empate',
             'description': f"Alta frequência de empates ({empate_count_recent} nos últimos {len(results[-15:])})"
@@ -276,7 +276,7 @@ def analyze_data(data):
 
     # Define janelas de dados para diferentes tipos de análise
     recent_short_term = data[-10:] # Para risco/manipulação imediata
-    recent_medium_term = data[-30:] # Para padrões gerais e probabilidades condicionais (más profundidade)
+    recent_medium_term = data[-30:] # Para padrões gerais e probabilidades condicionais (mais profundidade)
     all_results = [d['result'] for d in data] # Todos os resultados para padrões de longo prazo
 
     # 1. Detecção de Padrões
@@ -286,7 +286,7 @@ def analyze_data(data):
     # 2. Análise de Probabilidades Condicionais (Cadeia de Markov simplificada)
     conditional_probs = get_conditional_probabilities(all_results, lookback=3) # Lookback de 3 para um bom equilíbrio
 
-    # 3. Avaliação de Risco e Manipulação (usando dados más recentes)
+    # 3. Avaliação de Risco e Manipulação (usando dados mais recentes)
     risk_level = assess_risk(recent_short_term)
     manipulation = detect_manipulation(recent_short_term)
 
@@ -390,7 +390,7 @@ def make_smarter_prediction(all_results, pattern_strengths, conditional_probs, r
         prediction['reason'] = 'ALTO NÍVEL DE MANIPULAÇÃO DETECTADO. NÃO RECOMENDADO APOSTAR AGORA.'
         return prediction
 
-    # Prioridade 2: PREVISÃO POR PROBABILIDADES CONDICIONAIS - A más inteligente, se houver histórico.
+    # Prioridade 2: PREVISÃO POR PROBABILIDADES CONDICIONAIS - A mais inteligente, se houver histórico.
     if current_state in conditional_probs:
         state_probs = conditional_probs[current_state]
         
@@ -409,7 +409,7 @@ def make_smarter_prediction(all_results, pattern_strengths, conditional_probs, r
         
         # Avalia o Empate: Se a probabilidade de Empate for significativamente alta, pode sobrescrever C/V
         empate_prob = state_probs.get('E', 0.0)
-        if empate_prob > 0.35 and empate_prob > max_prob + 0.1: # Empate tem que ser bem más provável que C/V
+        if empate_prob > 0.35 and empate_prob > max_prob + 0.1: # Empate tem que ser bem mais provável que C/V
             prediction['color'] = 'E'
             prediction['confidence'] = min(95, int(empate_prob * 100))
             prediction['reason'] = f'Probabilidade muito alta de Empate ({int(empate_prob*100)}%) após {current_state}.'
@@ -549,7 +549,7 @@ def assess_risk(data):
 
     # Risco por Sequência de Empate
     empate_streak = 0
-    for i in range(len(results)-1, -1, -1): # Começa do fim para pegar a sequência más recente de empates
+    for i in range(len(results)-1, -1, -1): # Começa do fim para pegar a sequência mais recente de empates
         if results[i] == 'E':
             empate_streak += 1
         else:
@@ -565,8 +565,8 @@ def assess_risk(data):
     for i in range(len(results) - 1):
         if results[i] != results[i+1] and results[i] != 'E' and results[i+1] != 'E':
             alternating_count += 1
-    if len(results) > 5 and (alternating_count / (len(results) - 1)) > 0.75: # Más de 75% de alternância em curto período
-        risk_score += 30 # Indica um ambiente más imprevisível e arriscado
+    if len(results) > 5 and (alternating_count / (len(results) - 1)) > 0.75: # Mais de 75% de alternância em curto período
+        risk_score += 30 # Indica um ambiente mais imprevisível e arriscado
         
     # Risco por falta de equilíbrio recente (se uma cor sumiu ou dominou muito nos últimos 10)
     if len(results) > 10:
@@ -588,7 +588,7 @@ def detect_manipulation(data):
     results = [d['result'] for d in data]
     manipulation_score = 0
 
-    if len(results) < 10: # Precisa de más dados para começar a detectar manipulação de forma confiável
+    if len(results) < 10: # Precisa de mais dados para começar a detectar manipulação de forma confiável
         return 'low'
 
     # 1. Anomalia na frequência de Empates
@@ -598,7 +598,7 @@ def detect_manipulation(data):
     if len(results) > 10:
         empate_ratio = empate_count / len(results)
         # Limiares de alerta para proporção de empates (precisam de calibração para o jogo específico)
-        if empate_ratio > 0.45: # Más de 45% de empates recentes é suspeito
+        if empate_ratio > 0.45: # Mais de 45% de empates recentes é suspeito
             manipulation_score += 60
         elif empate_ratio < 0.05 and total_non_empate > 5: # Quase nenhum empate onde antes havia
              manipulation_score += 30
@@ -643,13 +643,13 @@ def get_recommendation(risk_level, manipulation_level, patterns, confidence):
     Gera a recomendação final para o usuário, priorizando segurança.
     """
     if manipulation_level == 'high':
-        return 'STOP - Manipulação Detectada!' # Más alta prioridade: segurança
+        return 'STOP - Manipulação Detectada!' # Mais alta prioridade: segurança
     if risk_level == 'high':
         return 'AVISO - Risco Alto, não apostar.' # Segunda prioridade: alto risco
     
     # Recomendações baseadas na confiança da previsão
     if confidence < 50:
-        return 'watch' # Baixa confiança, melhor observar más
+        return 'watch' # Baixa confiança, melhor observar mais
     if confidence >= 50 and confidence < 70:
         return 'consider' # Confiança razoável, considerar com cautela
     if confidence >= 70:
@@ -751,7 +751,7 @@ with col3:
 st.markdown("---")
 st.header("Histórico de Resultados")
 
-# Exibição do histórico de forma más organizada e limitada (últimos 20 na área de texto)
+# Exibição do histórico de forma mais organizada e limitada (últimos 20 na área de texto)
 display_history = st.session_state.history[-20:] 
 if display_history:
     history_str = " | ".join([
@@ -770,7 +770,7 @@ if display_history:
                 "Previsão na Hora": get_color_name(item['prediction_at_time']) if item['prediction_at_time'] else "N/A",
                 "Recomendação na Hora": item['recommendation_at_time']
             }
-            for item in st.session_state.history[::-1] # Inverte para mostrar o más recente primeiro
+            for item in st.session_state.history[::-1] # Inverte para mostrar o mais recente primeiro
         ],
         use_container_width=True,
         hide_index=True
