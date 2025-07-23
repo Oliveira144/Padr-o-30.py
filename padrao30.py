@@ -93,9 +93,9 @@ def undo_last_result():
 
 # --- NÚCLEO DE ANÁLISE PREDITIVA INTELIGENTE ---
 
-# Função auxiliar para pegar os últimos N resultados
+# Função auxiliar para pegar os últimos N resultados (CORRIGIDA)
 def get_last_n_results(data, n):
-    return [d['result'] for d d in data[-n:]]
+    return [d['result'] for d in data[-n:]] # 'd d' corrigido para 'd'
 
 # Função para detectar padrões
 def detect_patterns(data):
@@ -432,8 +432,8 @@ def assess_risk(data):
     for i in range(len(results) - 1):
         if results[i] != results[i+1] and results[i] != 'E' and results[i+1] != 'E':
             alternating_count += 1
-    if len(results) > 5 and (alternating_count / (len(results) - 1)) > 0.7: # Mais de 70% de alternância
-        risk_score += 25 # Indica um ambiente mais imprevisível
+    if len(results) > 5 and (alternating_count / (len(results) - 1)) > 0.7: # Más de 70% de alternância
+        risk_score += 25 # Indica un ambiente más impredecible
         
     if risk_score >= 70: # Limiar para HIGH
         return 'high'
