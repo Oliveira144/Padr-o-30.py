@@ -664,7 +664,7 @@ def get_recommendation(risk_level, manipulation_level, patterns, confidence):
 st.set_page_config(layout="wide", page_title="Analisador de Padrões de Cores")
 
 st.title("🔮 Analisador Inteligente de Padrões de Cores")
-st.markdown("---")
+st.markdown("---") # Este é o uso correto de '---' para exibição no Streamlit
 
 # Layout de colunas para organizar a interface
 col1, col2, col3 = st.columns(3)
@@ -685,7 +685,7 @@ with col1:
     if btn_e:
         add_result('E')
 
-    st.markdown("---")
+    st.markdown("---") # Uso correto de '---' dentro de st.markdown()
     st.header("Controle")
     # Botões de controle para desfazer e resetar o histórico
     st.button("↩️ Desfazer Último", on_click=undo_last_result, use_container_width=True)
