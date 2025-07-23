@@ -3,7 +3,6 @@ import numpy as np
 from datetime import datetime
 from collections import Counter
 import math
-from scipy import stats
 import random
 
 # Inicialização do estado da sessão (inalterado)
@@ -102,7 +101,7 @@ def detect_patterns(data):
     markov_patterns = detect_markov_patterns(results)
     patterns.extend(markov_patterns)
 
-    # Detecção de ciclos usando autocorrelação
+    # Detecção de ciclos usando autocorrelação simplificada
     cycle_patterns = detect_cycles(results)
     patterns.extend(cycle_patterns)
 
@@ -223,24 +222,36 @@ def detect_cycles(results):
     if len(results) < 8:
         return patterns
     
-    # Converter para valores numéricos para análise
+    # Autocorrelação simplificada sem scipy
     numeric = [1 if r == 'C' else (-1 if r == 'V' else 0) for r in results]
-    
-    # Autocorrelação para detectar ciclos
     max_lag = min(10, len(numeric)//2)
-    autocorr = []
-    for lag in range(1, max_lag+1):
-        corr = np.corrcoef(numeric[:-lag], numeric[lag:])[0,1]
-        if not np.isnan(corr):
-            autocorr.append((lag, corr))
+    best_lag = None
+    best_corr = -1
     
-    # Identificar ciclos significativos
-    significant_lags = [lag for lag, corr in autocorr if abs(corr) > 0.5]
-    for lag in significant_lags:
+    for lag in range(1, max_lag+1):
+        s1 = numeric[:-lag]
+        s2 = numeric[lag:]
+        if len(s1) == 0 or len(s2) == 0:
+            continue
+        
+        mean1 = sum(s1) / len(s1)
+        mean2 = sum(s2) / len(s2)
+        
+        cov = sum((x - mean1) * (y - mean2) for x, y in zip(s1, s2)) / len(s1)
+        std1 = math.sqrt(sum((x - mean1)**2 for x in s1) / len(s1))
+        std2 = math.sqrt(sum((y - mean2)**2 for y in s2) / len(s2))
+        
+        if std1 * std2 != 0:
+            corr = cov / (std1 * std2)
+            if abs(corr) > abs(best_corr):
+                best_corr = corr
+                best_lag = lag
+    
+    if best_lag and abs(best_corr) > 0.4:
         patterns.append({
             'type': 'cycle',
-            'length': lag,
-            'description': f'Ciclo detectado (tamanho {lag})'
+            'length': best_lag,
+            'description': f'Ciclo detectado (tamanho {best_lag})'
         })
     
     return patterns
@@ -303,14 +314,22 @@ def assess_risk(data):
     if imbalance > 0.4:
         risk_score += 40
     
-    # 3. Teste de aleatoriedade (Runs Test)
-    try:
-        numeric_results = [1 if r == 'C' else (2 if r == 'V' else 3) for r in results]
-        z_score, p_value = stats.runstest_1samp(numeric_results)
-        if p_value < 0.05:  # Não aleatório
-            risk_score += 20
-    except:
-        pass
+    # 3. Teste de aleatoriedade simplificado
+    if len(results) >= 10:
+        runs = 1
+        for i in range(1, len(results)):
+            if results[i] != results[i-1]:
+                runs += 1
+        
+        n1 = results.count('C')
+        n2 = results.count('V')
+        expected_runs = (2 * n1 * n2) / (n1 + n2) + 1
+        std_dev = math.sqrt((2 * n1 * n2 * (2 * n1 * n2 - n1 - n2)) / ((n1 + n2)**2 * (n1 + n2 - 1)))
+        
+        if std_dev != 0:
+            z_score = (runs - expected_runs) / std_dev
+            if abs(z_score) > 1.96:  # 95% de confiança
+                risk_score += 20
     
     # 4. Sequências extremas
     max_streak = calculate_max_streak(results)
@@ -615,16 +634,29 @@ def cycle_based_prediction(results):
     # Converter para valores numéricos
     numeric = [1 if r == 'C' else (-1 if r == 'V' else 0) for r in results]
     
-    # Autocorrelação para detectar ciclos
+    # Autocorrelação simplificada
     max_lag = min(5, len(numeric)//2)
     best_lag = None
     best_corr = 0
     
     for lag in range(1, max_lag+1):
-        corr = np.corrcoef(numeric[:-lag], numeric[lag:])[0,1]
-        if not np.isnan(corr) and abs(corr) > abs(best_corr):
-            best_corr = corr
-            best_lag = lag
+        s1 = numeric[:-lag]
+        s2 = numeric[lag:]
+        if len(s1) == 0 or len(s2) == 0:
+            continue
+        
+        mean1 = sum(s1) / len(s1)
+        mean2 = sum(s2) / len(s2)
+        
+        cov = sum((x - mean1) * (y - mean2) for x, y in zip(s1, s2)) / len(s1)
+        std1 = math.sqrt(sum((x - mean1)**2 for x in s1) / len(s1))
+        std2 = math.sqrt(sum((y - mean2)**2 for y in s2) / len(s2))
+        
+        if std1 * std2 != 0:
+            corr = cov / (std1 * std2)
+            if abs(corr) > abs(best_corr):
+                best_corr = corr
+                best_lag = lag
     
     if best_lag and abs(best_corr) > 0.4:
         # Prever baseado no ciclo detectado
@@ -647,9 +679,18 @@ def trend_analysis_prediction(results):
     # Converter para série numérica
     series = [1 if r == 'C' else -1 for r in filtered]
     
-    # Calcular tendência linear
+    # Calcular tendência linear simplificada
     x = np.arange(len(series))
-    slope, _, _, _, _ = stats.linregress(x, series)
+    x_mean = np.mean(x)
+    y_mean = np.mean(series)
+    
+    numerator = sum((x[i] - x_mean) * (series[i] - y_mean) for i in range(len(series)))
+    denominator = sum((x[i] - x_mean)**2 for i in range(len(series)))
+    
+    if denominator != 0:
+        slope = numerator / denominator
+    else:
+        slope = 0
     
     if slope > 0.05:  # Tendência de alta para C
         return {'color': 'C', 'confidence': 65}
