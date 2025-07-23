@@ -4,10 +4,10 @@ from datetime import datetime
 from collections import defaultdict, Counter
 
 # --- Inicialização do estado da sessão ---
-if 'history' not in st.session_state: # CORRIGIDO: de 'not not' para 'not in'
+if 'history' not in st.session_state:
     st.session_state.history = []
     
-if 'analysis' not in st.session_state: # CORRIGIDO: de 'not not' para 'not in'
+if 'analysis' not in st.session_state:
     st.session_state.analysis = {
         'patterns': [],
         'riskLevel': 'low',
@@ -19,7 +19,7 @@ if 'analysis' not in st.session_state: # CORRIGIDO: de 'not not' para 'not in'
     }
 
 # Estado para métricas de performance (mantido do anterior)
-if 'performance_metrics' not in st.session_state: # CORRIGIDO: de 'not not' para 'not in'
+if 'performance_metrics' not in st.session_state:
     st.session_state.performance_metrics = {
         'total_predictions': 0,
         'correct_predictions': 0,
@@ -255,7 +255,7 @@ def make_smarter_prediction(all_results, pattern_strengths, conditional_probs, r
             else: # Sequências curtas (2), tendem a continuar
                 prediction['color'] = current_color
                 prediction['confidence'] = min(70, 45 + (streak_length * 10))
-                prediction['reason'] = f'Continuação de sequência curta ({streak_length}x {get_color_name(current_color)}).'
+                prediction['reason'] = f'Continuação de sequência curta ({streak_length}x {get_color_name(current_color)}.'
             
             # Aplica a força do padrão à confiança
             prediction['confidence'] = int(prediction['confidence'] * strength)
@@ -438,4 +438,190 @@ def get_recommendation_color(rec):
         'bet': 'background-color: #D1FAE5; color: #065F46; border: 2px solid #34D399;',
         'avoid': 'background-color: #FEE2E2; color: #B91C1C; border: 2px solid #F87171;',
         'watch': 'background-color: #FEF3C7; color: #B45309; border: 2px solid #FBBF24;',
-        'more-data': 'background-color: #E5E7EB; color: #4B5563; borde
+        # LINHA 441 CORRIGIDA AQUI:
+        'more-data': 'background-color: #E5E7EB; color: #4B5563; border: 2px solid #9CA3AF;'
+    }.get(rec, 'background-color: #E5E7EB; color: #4B5563; border: 2px solid #9CA3AF;')
+
+def display_history_corrected():
+    if not st.session_state.history:
+        st.info("Nenhum resultado inserido ainda. Use os botões acima para começar.")
+        return
+    
+    total = len(st.session_state.history)
+    count_c = sum(1 for r in st.session_state.history if r['result'] == 'C')
+    count_v = sum(1 for r in st.session_state.history if r['result'] == 'V')
+    count_e = sum(1 for r in st.session_state.history if r['result'] == 'E')
+    
+    st.markdown(f"""
+    **Total:** {total} resultados  
+    🔴 **Vermelho:** {count_c}  
+    🔵 **Azul:** {count_v}  
+    🟡 **Empate:** {count_e}
+    """)
+
+    html_elements = []
+    
+    for result in reversed(st.session_state.history[-72:]):
+        color_code = result['result']
+        time = result['timestamp'].strftime("%H:%M:%S")
+        
+        style_map = {
+            'C': 'background-color: #EF4444; color: white;',
+            'V': 'background-color: #3B82F6; color: white;',
+            'E': 'background-color: #F59E0B; color: black;'
+        }
+        
+        style = style_map.get(color_code, 'background-color: gray;')
+        
+        html_elements.append(f"""
+            <div style="width: 35px; height: 35px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; {style}"
+                 title="{get_color_name(color_code)} às {time}">
+                {color_code}
+            </div>
+        """.strip())
+
+    html_content = f'<div style="display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0;">{"".join(html_elements)}</div>'
+    
+    st.markdown(html_content, unsafe_allow_html=True)
+    st.caption(f"Exibindo últimos {min(len(st.session_state.history), 72)} resultados")
+    st.caption("Ordem: Mais recente → Mais antigo (esquerda → direita)")
+
+# --- Interface do Streamlit ---
+
+st.set_page_config(page_title="Análise Preditiva - Ultra Int", layout="wide", initial_sidebar_state="collapsed")
+
+st.markdown("""
+    <style>
+    body { color: #FAFAFA; background-color: #1E1E1E; }
+    .stApp { background-color: #1E1E1E; }
+    .stButton>button { background-color: #333333; color: #FAFAFA; border: 1px solid #555555; }
+    .stButton>button:hover { background-color: #555555; }
+    .stTextInput>div>div>input { background-color: #333333; color: #FAFAFA; }
+    .stMarkdown { color: #FAFAFA; }
+    h1, h2, h3, h4, h5, h6 { color: #E0E0E0; }
+    div[data-testid="stMetric"] > div { border-radius: 10px; padding: 10px; text-align: center; background-color: #2D2D2D; border: 1px solid #444444; }
+    div[data-testid="stMetricValue"] { font-size: 1.5rem; font-weight: bold; color: #00FF00; }
+    div[data-testid="stMetricLabel"] { color: #BBBBBB; }
+    div[data-testid="stMetricDelta"] { color: #00FF00; }
+    div[data-testid="stAlert"] { background-color: #333333; color: #FAFAFA; border-color: #555555; }
+    </style>
+""", unsafe_allow_html=True)
+
+st.title("🎰 Sistema de Análise Preditiva - Ultra Inteligente")
+
+cols_buttons = st.columns(5)
+with cols_buttons[0]:
+    st.button("🔴 Vermelho (C)", on_click=lambda: add_result('C'), help="Registrar resultado Vermelho")
+with cols_buttons[1]:
+    st.button("🔵 Azul (V)", on_click=lambda: add_result('V'), help="Registrar resultado Azul")
+with cols_buttons[2]:
+    st.button("🟡 Empate (E)", on_click=lambda: add_result('E'), help="Registrar Empate")
+with cols_buttons[3]:
+    st.button("↩️ Desfazer", on_click=undo_last_result, help="Desfazer o último resultado inserido")
+with cols_buttons[4]:
+    st.button("🔄 Reset Total", on_click=reset_history, help="Limpar todo o histórico e métricas")
+
+
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.subheader("📊 Histórico de Resultados")
+    display_history_corrected()
+
+with col2:
+    with st.container():
+        st.subheader("🎯 Performance da Previsão")
+        total_pred = st.session_state.performance_metrics['total_predictions']
+        correct_pred = st.session_state.performance_metrics['correct_predictions']
+        wrong_pred = st.session_state.performance_metrics['wrong_predictions']
+        g1_hits = st.session_state.performance_metrics['g1_hits']
+
+        accuracy = (correct_pred / total_pred * 100) if total_pred > 0 else 0
+
+        st.metric("Acertos Totais", correct_pred)
+        st.metric("Erros Totais", wrong_pred)
+        st.metric("Acertos G1", g1_hits, help="Previsões corretas na primeira tentativa (Green 1)")
+        st.metric("Assertividade Geral", f"{accuracy:.2f}%")
+
+    with st.container():
+        st.subheader("🧠 Padrões Detectados")
+        if st.session_state.analysis['patterns']:
+            for pattern in st.session_state.analysis['patterns']:
+                st.info(f"**{pattern['type'].upper()}**: {pattern['description']}")
+        else:
+            st.info("Nenhum padrão detectado")
+    
+    with st.container():
+        st.subheader("⚠️ Análise de Risco")
+        cols_risk = st.columns(2)
+        with cols_risk[0]:
+            risk_level = st.session_state.analysis['riskLevel']
+            st.metric("Risco de Quebra", risk_level.upper(), 
+                      help="Probabilidade de quebra do padrão atual")
+        with cols_risk[1]:
+            manipulation = st.session_state.analysis['manipulation']
+            st.metric("Manipulação", manipulation.upper(),
+                     help="Indícios de manipulação nos resultados")
+    
+    with st.container():
+        st.subheader("📈 Previsão IA")
+        if st.session_state.analysis['prediction']:
+            color_name = get_color_name(st.session_state.analysis['prediction'])
+            color_icon = {
+                'C': "🔴", 'V': "🔵", 'E': "🟡"
+            }.get(st.session_state.analysis['prediction'], "⚪") # Adicionado ícone para empate
+            confidence = st.session_state.analysis['confidence']
+            
+            st.markdown(
+                f"<div style='font-size: 1.5rem; text-align: center; margin: 1rem 0;'>"
+                f"{color_icon} **{color_name}** ({st.session_state.analysis['prediction']})"
+                f"</div>", 
+                unsafe_allow_html=True
+            )
+            st.progress(confidence/100, text=f"Confiança: {confidence}%")
+            st.caption(f"Motivo: {st.session_state.analysis['prediction_reason']}") # Exibe o motivo da previsão
+        else:
+            st.info("Aguardando mais dados para previsão...")
+    
+    with st.container():
+        st.subheader("💡 Recomendação")
+        rec = st.session_state.analysis['recommendation']
+        rec_text = ""
+        if rec == 'bet': 
+            rec_text = "✅ APOSTAR - Padrão favorável e confiança alta."
+        elif rec == 'avoid': 
+            rec_text = "⚠️ EVITAR - Alto risco, manipulação ou baixa confiança."
+        elif rec == 'watch': 
+            rec_text = "👁️ OBSERVAR - Aguardar padrão claro ou maior confiança."
+        elif rec == 'more-data': 
+            rec_text = "📊 COLETAR MAIS DADOS (mínimo 5 resultados)."
+        
+        st.markdown(
+            f"<div style='padding: 1rem; border-radius: 0.5rem; text-align: center; "
+            f"font-weight: bold; font-size: 1.2rem; {get_recommendation_color(rec)}'>"
+            f"{rec_text}"
+            f"</div>",
+            unsafe_allow_html=True
+        )
+
+with st.expander("ℹ️ Sobre o Sistema (Ultra Inteligente)"):
+    st.write("""
+    **Este sistema incorpora inteligência aprimorada para detecção e previsão de padrões.**
+    
+    **Principais Melhorias:**
+    - **Probabilidades Condicionais (Cadeia de Markov Simplificada):** O coração da inteligência. O sistema aprende a probabilidade do próximo resultado com base nos *últimos 3 resultados*, tornando a previsão muito mais contextual e adaptativa.
+    - **Ponderação de Padrões:** Cada padrão detectado tem um "peso" que influencia a confiança da previsão, dando mais importância a padrões mais fortes ou mais longos.
+    - **Lógica de Previsão Aprimorada:** Combina probabilidades condicionais, força dos padrões e análise de risco/manipulação para uma decisão mais robusta.
+    - **Motivo da Previsão:** O app agora explica por que chegou a determinada previsão, aumentando a transparência.
+    - **Risco e Manipulação Mais Sensíveis:** Limiares e pesos ajustados para detectar cenários de risco e manipulação com maior precisão.
+    - **Recomendação Dinâmica:** A recomendação ("Apostar", "Evitar", "Observar") agora considera a confiança da previsão, além do risco e manipulação.
+    
+    **Como usar:**
+    1. Continue inserindo os resultados fielmente.
+    2. Observe a "Previsão IA" e o "Motivo" para entender a lógica.
+    3. Monitore a "Performance da Previsão" para avaliar a assertividade do sistema em tempo real.
+    
+    Este sistema é projetado para aprender e adaptar-se melhor às nuances das sequências de resultados, buscando ser mais preditivo em cenários complexos.
+    """)
+    st.caption("Versão 2.0 - Ultra Inteligente - Para fins educacionais e de estudo")
+
