@@ -57,7 +57,7 @@ def calculate_g1_accuracy():
     """
     relevant_predictions = [
         item for item in st.session_state.history 
-        if item['prediction_at_time'] is not None and item['recommendation_at_time'] == 'bet'
+        if item.get('prediction_at_time') is not None and item.get('recommendation_at_time') == 'bet'
     ]
     
     total_g1_opportunities = len(relevant_predictions)
@@ -65,7 +65,7 @@ def calculate_g1_accuracy():
     if total_g1_opportunities == 0:
         return 0
     
-    correct_g1_predictions = sum(1 for item in relevant_predictions if item['prediction_at_time'] == item['result'])
+    correct_g1_predictions = sum(1 for item in relevant_predictions if item.get('prediction_at_time') == item.get('result'))
     
     return (correct_g1_predictions / total_g1_opportunities) * 100
 
@@ -83,7 +83,8 @@ def add_result(result):
         return
 
     # Apenas computa métricas se havia uma previsão ativa e histórico suficiente para considerar
-    if st.session_state.analysis['prediction'] is not None and len(st.session_state.history) >= 4:
+    # Use .get() para evitar KeyError caso alguma chave esteja faltando inesperadamente
+    if st.session_state.analysis.get('prediction') is not None and len(st.session_state.history) >= 4:
         predicted_color = st.session_state.analysis['prediction']
         recommendation = st.session_state.analysis['recommendation']
         
@@ -143,14 +144,15 @@ def undo_last_result():
         
         # Lógica para reverter as métricas de performance de forma precisa
         # Só reverte se a entrada anterior gerou uma previsão válida e havia dados suficientes
-        if removed_item['prediction_at_time'] is not None and len(st.session_state.history) >= 4: 
+        # Use .get() para evitar KeyError
+        if removed_item.get('prediction_at_time') is not None and len(st.session_state.history) >= 4: 
             if st.session_state.performance_metrics['total_predictions'] > 0:
                 st.session_state.performance_metrics['total_predictions'] -= 1
             
-            if removed_item['prediction_at_time'] == removed_item['result']:
+            if removed_item.get('prediction_at_time') == removed_item.get('result'):
                 if st.session_state.performance_metrics['correct_predictions'] > 0:
                     st.session_state.performance_metrics['correct_predictions'] -= 1
-                if removed_item['recommendation_at_time'] == 'bet' and st.session_state.performance_metrics['g1_hits'] > 0:
+                if removed_item.get('recommendation_at_time') == 'bet' and st.session_state.performance_metrics['g1_hits'] > 0:
                     st.session_state.performance_metrics['g1_hits'] -= 1
             else:
                 if st.session_state.performance_metrics['wrong_predictions'] > 0:
@@ -159,7 +161,7 @@ def undo_last_result():
             # Remover a última entrada de acurácia dos históricos (para manter a consistência)
             if st.session_state.performance_metrics['accuracy_history']:
                 st.session_state.performance_metrics['accuracy_history'].pop()
-            if st.session_state.performance_metrics['g1_accuracy_history'] and removed_item['recommendation_at_time'] == 'bet':
+            if st.session_state.performance_metrics['g1_accuracy_history'] and removed_item.get('recommendation_at_time') == 'bet':
                 st.session_state.performance_metrics['g1_accuracy_history'].pop()
 
 
@@ -172,7 +174,8 @@ def undo_last_result():
 
 def get_last_n_results(data, n):
     """Retorna os resultados dos últimos N itens do histórico, útil para análises de janela."""
-    return [d['result'] for d in data[-n:]]
+    # Adicionando uma verificação para garantir que 'd' é um dicionário e tem a chave 'result'
+    return [d['result'] for d in data[-n:] if isinstance(d, dict) and 'result' in d]
 
 def detect_patterns(data):
     """
@@ -180,7 +183,8 @@ def detect_patterns(data):
     Aplica diferentes lógicas para identificar sequências, alternâncias, etc.
     """
     patterns = []
-    results = [d['result'] for d in data] # Usa todos os dados para padrões de longo prazo
+    # Filtrar dados para garantir que cada item é um dicionário e contém a chave 'result'
+    results = [d['result'] for d in data if isinstance(d, dict) and 'result' in d] 
 
     if len(results) < 2:
         return patterns
@@ -262,7 +266,10 @@ def analyze_data(data):
     Orquestra todas as etapas da análise: detecção de padrões, cálculo de probabilidades,
     avaliação de risco e manipulação, e finalmente a previsão inteligente.
     """
-    if len(data) < 5: # Mínimo de dados para começar uma análise significativa
+    # Filtrar e limpar os dados de entrada para garantir que são válidos
+    cleaned_data = [item for item in data if isinstance(item, dict) and 'result' in item]
+
+    if len(cleaned_data) < 5: # Mínimo de dados para começar uma análise significativa
         st.session_state.analysis = {
             'patterns': [],
             'riskLevel': 'low',
@@ -270,17 +277,17 @@ def analyze_data(data):
             'prediction': None,
             'confidence': 0,
             'recommendation': 'more-data',
-            'prediction_reason': 'Poucos dados para análise inicial.'
+            'prediction_reason': 'Poucos dados válidos para análise inicial.'
         }
         return
 
     # Define janelas de dados para diferentes tipos de análise
-    recent_short_term = data[-10:] # Para risco/manipulação imediata
-    recent_medium_term = data[-30:] # Para padrões gerais e probabilidades condicionais (mais profundidade)
-    all_results = [d['result'] for d in data] # Todos os resultados para padrões de longo prazo
+    recent_short_term = cleaned_data[-10:] # Para risco/manipulação imediata
+    recent_medium_term = cleaned_data[-30:] # Para padrões gerais e probabilidades condicionais (mais profundidade)
+    all_results = [d['result'] for d in cleaned_data] # Todos os resultados para padrões de longo prazo
 
     # 1. Detecção de Padrões
-    patterns = detect_patterns(all_results) 
+    patterns = detect_patterns(cleaned_data) # Passa o cleaned_data para detect_patterns
     pattern_strengths = calculate_pattern_strength(patterns, all_results)
 
     # 2. Análise de Probabilidades Condicionais (Cadeia de Markov simplificada)
@@ -519,7 +526,8 @@ def assess_risk(data):
     Avalia o nível de risco do ambiente de jogo com base em padrões de risco, 
     como sequências longas e volatilidade.
     """
-    results = [d['result'] for d in data]
+    # Filtrar dados para garantir que cada item é um dicionário e contém a chave 'result'
+    results = [d['result'] for d in data if isinstance(d, dict) and 'result' in d]
     risk_score = 0
 
     # Risco por Sequência Extrema (cores C/V)
@@ -585,7 +593,8 @@ def detect_manipulation(data):
     """
     Detecta possíveis sinais de manipulação no jogo com base em anomalias e desequilíbrios.
     """
-    results = [d['result'] for d in data]
+    # Filtrar dados para garantir que cada item é um dicionário e contém a chave 'result'
+    results = [d['result'] for d in data if isinstance(d, dict) and 'result' in d]
     manipulation_score = 0
 
     if len(results) < 10: # Precisa de mais dados para começar a detectar manipulação de forma confiável
@@ -664,7 +673,7 @@ def get_recommendation(risk_level, manipulation_level, patterns, confidence):
 st.set_page_config(layout="wide", page_title="Analisador de Padrões de Cores")
 
 st.title("🔮 Analisador Inteligente de Padrões de Cores")
-st.markdown("---") # Este é o uso correto de '---' para exibição no Streamlit
+st.markdown("---") 
 
 # Layout de colunas para organizar a interface
 col1, col2, col3 = st.columns(3)
@@ -685,7 +694,7 @@ with col1:
     if btn_e:
         add_result('E')
 
-    st.markdown("---") # Uso correto de '---' dentro de st.markdown()
+    st.markdown("---") 
     st.header("Controle")
     # Botões de controle para desfazer e resetar o histórico
     st.button("↩️ Desfazer Último", on_click=undo_last_result, use_container_width=True)
@@ -752,7 +761,8 @@ st.markdown("---")
 st.header("Histórico de Resultados")
 
 # Exibição do histórico de forma mais organizada e limitada (últimos 20 na área de texto)
-display_history = st.session_state.history[-20:] 
+# Adicionei a verificação de existência da chave 'result' aqui também para robustez
+display_history = [item for item in st.session_state.history[-20:] if isinstance(item, dict) and 'result' in item]
 if display_history:
     history_str = " | ".join([
         f"{get_color_name(item['result'])} ({item['result']})"
@@ -765,12 +775,12 @@ if display_history:
     st.dataframe(
         [
             {
-                "Resultado": get_color_name(item['result']),
-                "Hora": item['timestamp'].strftime("%H:%M:%S"),
-                "Previsão na Hora": get_color_name(item['prediction_at_time']) if item['prediction_at_time'] else "N/A",
-                "Recomendação na Hora": item['recommendation_at_time']
+                "Resultado": get_color_name(item.get('result', 'N/A')), # Usar .get() para segurança
+                "Hora": item.get('timestamp', datetime.now()).strftime("%H:%M:%S"),
+                "Previsão na Hora": get_color_name(item.get('prediction_at_time')) if item.get('prediction_at_time') else "N/A",
+                "Recomendação na Hora": item.get('recommendation_at_time', 'N/A')
             }
-            for item in st.session_state.history[::-1] # Inverte para mostrar o mais recente primeiro
+            for item in st.session_state.history[::-1] if isinstance(item, dict) # Inverte para mostrar o mais recente primeiro, e filtra itens inválidos
         ],
         use_container_width=True,
         hide_index=True
