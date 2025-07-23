@@ -657,7 +657,7 @@ def get_recommendation(risk_level, manipulation_level, patterns, confidence):
 
     return 'watch' # Recomendação padrão se nenhuma condição for atendida
 
----
+# ---
 
 # Interface do Streamlit
 
