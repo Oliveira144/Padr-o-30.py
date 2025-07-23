@@ -93,6 +93,80 @@ def undo_last_result():
 
 # --- NÚCLEO DE ANÁLISE PREDITIVA INTELIGENTE ---
 
+# Função auxiliar para pegar os últimos N resultados
+def get_last_n_results(data, n):
+    return [d['result'] for d d in data[-n:]]
+
+# Função para detectar padrões
+def detect_patterns(data):
+    patterns = []
+    results = [d['result'] for d in data]
+
+    if len(results) < 2:
+        return patterns
+
+    # Padrão de Sequência (Streak)
+    if len(results) >= 2:
+        last_color = results[-1]
+        streak_length = 0
+        for i in range(len(results) - 1, -1, -1):
+            if results[i] == last_color:
+                streak_length += 1
+            else:
+                break
+        if streak_length >= 2:
+            patterns.append({
+                'type': 'streak',
+                'color': last_color,
+                'length': streak_length,
+                'description': f"Sequência de {streak_length}x {get_color_name(last_color)}"
+            })
+
+    # Padrão de Alternância (Ex: C V C V C V)
+    if len(results) >= 4:
+        is_alternating = True
+        for i in range(len(results) - 1, len(results) - 5, -1): # Verifica os últimos 4
+            if i < 1: break
+            if results[i] == results[i-1] or results[i] == 'E' or results[i-1] == 'E': # Ignora empates na alternância
+                is_alternating = False
+                break
+        if is_alternating:
+            patterns.append({
+                'type': 'alternating',
+                'description': "Padrão alternado (ex: C V C V)"
+            })
+    
+    # Padrão 2x2 (Ex: C C V V C C)
+    if len(results) >= 4:
+        last_4 = results[-4:]
+        if (last_4[0] == last_4[1] and last_4[2] == last_4[3] and 
+            last_4[0] != last_4[2] and 'E' not in last_4):
+            patterns.append({
+                'type': '2x2',
+                'description': "Padrão 2x2 (ex: C C V V)"
+            })
+
+    # Padrão ZigZag (Ex: C V V C C V) - mais complexo que 2x2, mas segue um ciclo
+    if len(results) >= 6:
+        last_6 = results[-6:]
+        if (last_6[0] == last_6[3] and last_6[1] == last_6[4] and last_6[2] == last_6[5] and
+            last_6[0] != last_6[1] and 'E' not in last_6): # Ex: C V C C V C
+             patterns.append({
+                'type': 'zigzag',
+                'description': "Padrão ZigZag (ex: C V V C C V)"
+            })
+
+
+    # Alta frequência de Empates
+    empate_count_recent = results[-10:].count('E') # Últimos 10 resultados
+    if len(results[-10:]) >= 5 and empate_count_recent / len(results[-10:]) > 0.3: # Mais de 30% de empates recentes
+        patterns.append({
+            'type': 'high-empate',
+            'description': f"Alta frequência de empates ({empate_count_recent} nos últimos 10)"
+        })
+        
+    return patterns
+
 # Orquestrador da análise
 def analyze_data(data):
     if len(data) < 5:
@@ -110,7 +184,7 @@ def analyze_data(data):
     recent = data[-30:] # Usar mais dados recentes para análise de padrões e tendências
     all_results = [d['result'] for d in data]
 
-    # 1. Detecção de Padrões Aprimorada
+    # 1. Detecção de Padrões Aprimorada (AGORA detect_patterns ESTÁ DEFINIDA!)
     patterns = detect_patterns(recent)
     pattern_strengths = calculate_pattern_strength(patterns, all_results) # Nova função
 
@@ -255,7 +329,7 @@ def make_smarter_prediction(all_results, pattern_strengths, conditional_probs, r
             else: # Sequências curtas (2), tendem a continuar
                 prediction['color'] = current_color
                 prediction['confidence'] = min(70, 45 + (streak_length * 10))
-                prediction['reason'] = f'Continuação de sequência curta ({streak_length}x {get_color_name(current_color)}.'
+                prediction['reason'] = f'Continuação de sequência curta ({streak_length}x {get_color_name(current_color)}).'
             
             # Aplica a força do padrão à confiança
             prediction['confidence'] = int(prediction['confidence'] * strength)
@@ -438,7 +512,6 @@ def get_recommendation_color(rec):
         'bet': 'background-color: #D1FAE5; color: #065F46; border: 2px solid #34D399;',
         'avoid': 'background-color: #FEE2E2; color: #B91C1C; border: 2px solid #F87171;',
         'watch': 'background-color: #FEF3C7; color: #B45309; border: 2px solid #FBBF24;',
-        # LINHA 441 CORRIGIDA AQUI:
         'more-data': 'background-color: #E5E7EB; color: #4B5563; border: 2px solid #9CA3AF;'
     }.get(rec, 'background-color: #E5E7EB; color: #4B5563; border: 2px solid #9CA3AF;')
 
